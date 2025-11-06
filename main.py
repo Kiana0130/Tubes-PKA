@@ -5,8 +5,8 @@ import settings
 
 pygame.init()
 
-LEVEL = 1
-
+LEVEL = 2
+  
 def draw_grid(screen, grid, tile_size):
   rows = len(grid)
   cols = len(grid[0])
@@ -27,7 +27,7 @@ def draw_grid(screen, grid, tile_size):
       else:
         color = settings.COLOR_PASSAGE
       pygame.draw.rect(screen, color, rect)
-  
+    
 def make_window():
   screen = pygame.display.set_mode((settings.WINDOW_SIZE, settings.WINDOW_SIZE))
   pygame.display.set_caption('Maze')

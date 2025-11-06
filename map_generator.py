@@ -34,7 +34,7 @@ def generate_maze(level: int) -> List[List[str]]:
     idx = random.randrange(0, len(frontier))
     x, y, from_x, from_y = frontier.pop(idx)
 
-    if grid[y][x] == '.':
+    if grid[y][x] == '.': #<- Color passage 
       continue
 
     passages = 0
