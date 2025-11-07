@@ -2,6 +2,8 @@ import pygame
 import sys
 import map_generator
 import settings
+from Agen.A_Star import AStarAgent
+from Agen.BFS import BFSAgent
 
 pygame.init()
 
@@ -40,6 +42,10 @@ def main():
   grid = map_generator.generate_maze(LEVEL)
   screen = make_window()
 
+  start, goal, keys = find_positions(grid)
+  astar = AStarAgent(start[0], start[1], keys, goal) 
+  bfs   = BFSAgent(start[0], start[1], keys, goal)   
+    
   running = True
   while running:
     for event in pygame.event.get():
@@ -54,16 +60,63 @@ def main():
           LEVEL = LEVEL + 1 if LEVEL < 3 else 1
           grid = map_generator.generate_maze(LEVEL)
           
+    nx, ny = astar.step(grid)
+    astar.x, astar.y = nx, ny
+    
+    bx, by = bfs.step(grid)
+    bfs.x, bfs.y = bx, by
+
+    
+    if astar.has_key and (astar.x, astar.y) == goal:
+      print("Player menang level", LEVEL)
+
+      LEVEL = LEVEL + 1 if LEVEL < 3 else 1
+
+      grid = map_generator.generate_maze(LEVEL)
+      start, goal, keys = find_positions(grid)
+      astar = AStarAgent(start[0], start[1], keys, goal)
+      bfs = BFSAgent(start[0], start[1], keys, goal)
+      continue
+    
     size = map_generator.get_size_for_level(LEVEL)
     tile_size = settings.WINDOW_SIZE // size
     
     screen.fill((0, 0, 0))
     draw_grid(screen, grid, tile_size)
+
+    pygame.draw.circle(
+        screen,(0,0,255),
+        (astar.x*tile_size + tile_size//2, astar.y*tile_size + tile_size//2),
+        tile_size//3
+    )
+    
+    pygame.draw.circle(
+        screen,(255,140,0), 
+        (bfs.x*tile_size + tile_size//2, bfs.y*tile_size + tile_size//2),
+        tile_size//3
+    )
+
+
     pygame.display.flip()
-    clock.tick(settings.FPS)
+    clock.tick(5)
 
   pygame.quit()
   sys.exit()
+
+def find_positions(grid):
+    start = None
+    goal  = None
+    keys = []
+    
+    for y,row in enumerate(grid):
+        for x,val in enumerate(row):
+            if val == 'S':
+                start = (x,y)
+            elif val == 'G':
+                goal = (x,y)
+            elif val == 'K':
+                keys.append( (x,y) )
+    return start, goal, keys
 
 if __name__ == '__main__':
   main()

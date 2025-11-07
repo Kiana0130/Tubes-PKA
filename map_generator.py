@@ -34,7 +34,7 @@ def generate_maze(level: int) -> List[List[str]]:
     idx = random.randrange(0, len(frontier))
     x, y, from_x, from_y = frontier.pop(idx)
 
-    if grid[y][x] == '.': #<- Color passage 
+    if grid[y][x] == '.':
       continue
 
     passages = 0
@@ -42,7 +42,7 @@ def generate_maze(level: int) -> List[List[str]]:
       if grid[ny][nx] == '.':
         passages += 1
 
-    if passages == 1:
+    if passages <= 1:
       grid[y][x] = '.'
       for nx, ny in _neighbors(x, y, w, h):
         if grid[ny][nx] == '#':
@@ -68,55 +68,13 @@ def _place_start_and_goal(grid: List[List[str]]) -> Tuple[Tuple[int, int], Tuple
   h = len(grid)
   w = len(grid[0])
 
-  sides = ['top', 'bottom', 'left', 'right']
-  pair = random.choice([('top', 'bottom'), ('left', 'right')])
+  passage_cells = [(x,y) for y in range(h) for x in range(w) if grid[y][x] == '.']
 
-  def random_on_side(side):
-    if side == 'top':
-      y = 0
-      xs = list(range(w))
-      random.shuffle(xs)
-      for x in xs:
-        if grid[y][x] == '.':
-          return x, y
-    if side == 'bottom':
-      y = h - 1
-      xs = list(range(w))
-      random.shuffle(xs)
-      for x in xs:
-        if grid[y][x] == '.':
-          return x, y
-    if side == 'left':
-      x = 0
-      ys = list(range(h))
-      random.shuffle(ys)
-      for y in ys:
-        if grid[y][x] == '.':
-          return x, y
-    if side == 'right':
-      x = w - 1
-      ys = list(range(h))
-      random.shuffle(ys)
-      for y in ys:
-        if grid[y][x] == '.':
-          return x, y
-    return None
-  
-  start = random_on_side(pair[0])
-  goal = random_on_side(pair[1])
+  start = random.choice(passage_cells)
 
-  if start is None:
-    start = _find_any_passage_on_side(grid, pair[0])
-  if goal is None:
-    goal = _find_any_passage_on_side(grid, pair[1])
-
-  if start is None or goal is None or start == goal:
-    passage_cells = [(x, y) for y in range(h) for x in range(w) if grid[y][x] == '.']
-    if len(passage_cells) >= 2:
-      start = passage_cells[0]
-      goal = passage_cells[-1]
-    else:
-      return _place_start_and_goal(grid)
+  goal = random.choice(passage_cells)
+  while goal == start:
+    goal = random.choice(passage_cells)
 
   return start, goal
 
