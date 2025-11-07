@@ -42,7 +42,7 @@ def generate_maze(level: int) -> List[List[str]]:
       if grid[ny][nx] == '.':
         passages += 1
 
-    if passages <= 1:
+    if passages <= 2:
       grid[y][x] = '.'
       for nx, ny in _neighbors(x, y, w, h):
         if grid[ny][nx] == '#':
