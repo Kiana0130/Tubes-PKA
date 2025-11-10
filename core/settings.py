@@ -1,3 +1,4 @@
+#settings.py
 LEVEL_SIZES = {
   1: 16,
   2: 32,

@@ -1,3 +1,5 @@
+# map_generator.py
+
 import random
 from typing import List, Tuple
 from collections import deque
