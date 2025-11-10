@@ -3,7 +3,7 @@
 import pygame
 import math
 import sys
-import settings
+import core.settings as settings
 
 # Colors
 COLOR_BG = (10, 10, 20)

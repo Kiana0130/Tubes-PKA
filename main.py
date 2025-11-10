@@ -1,8 +1,8 @@
-import pygame, sys
+import pygame, sys, random
 import core.map_generator as map_generator
 import core.settings as settings
 import core.renderer as renderer
-from Agen.guardian import Guardian  # <-- IMPORTED Guardian
+from Agen.guardian import Guardian
 from Agen.A_Star import AStarAgent
 from Agen.BFS import BFSAgent
 
@@ -24,10 +24,35 @@ def reset_level(level_num):
     start, goal, keys = find_positions(grid)
     astar = AStarAgent(start[0], start[1], keys, goal)
     bfs = BFSAgent(start[0], start[1], keys, goal)
+
+    # --- MODIFIED GUARDIAN SPAWNING ---
+    # Find all valid passage cells that are not the start, goal, or key
+    h, w = len(grid), len(grid[0])
+    passage_cells = []
+    for y in range(h):
+        for x in range(w):
+            if grid[y][x] == '.':
+                passage_cells.append((x,y))
     
-    # Use the imported Guardian class
-    guardians = [Guardian(grid, (astar.x, astar.y), c) for c in [(180, 0, 255), (255, 0, 150)]]
+    # Ensure spawn points are not on the player, goal, or keys
+    forbidden_spawns = {start, goal} | set(keys)
+    valid_spawns = [p for p in passage_cells if p not in forbidden_spawns]
     
+    guardian_colors = [(180, 0, 255), (255, 0, 150)]
+    guardians = []
+    
+    for color in guardian_colors:
+        if valid_spawns:
+            # Pick a random valid spawn and remove it from the list
+            spawn_pos = random.choice(valid_spawns)
+            valid_spawns.remove(spawn_pos)
+            guardians.append(Guardian(grid, spawn_pos, color))
+        else:
+            # Fallback if no valid spots (unlikely), spawn near start
+            print("Warning: No valid spawn points found. Spawning near player.")
+            guardians.append(Guardian(grid, (start[0]+1, start[1]), color)) # Simple fallback
+    # --- END OF MODIFICATION ---
+            
     return grid, astar, bfs, guardians, goal
 
 def main():
@@ -48,18 +73,20 @@ def main():
         # Logic Step
         nx, ny = astar.step(grid)
         if nx != astar.x or ny != astar.y:
-            angle = 0 if nx > astar.x else 180 if nx < astar.x else 90 if ny < astar.y else 270 # Corrected logic
+            angle = 0 if nx > astar.x else 180 if nx < astar.x else 90 if ny > astar.y else 270
         astar.x, astar.y = nx, ny
         bfs.x, bfs.y = bfs.step(grid)
         
-        # --- MODIFIED ---
-        # Changed from move_towards_player to the new roam method
-        for g in guardians: g.roam(grid)
-        # ----------------
+        # Update guardians based on A* agent's (player) position
+        for g in guardians: 
+            g.move_towards_player(astar.x, astar.y)
 
         # Check Conditions
         if any((g.x, g.y) == (astar.x, astar.y) for g in guardians):
-            print("💀 Game Over"); return
+            print("💀 Caught! Resetting level...")
+            grid, astar, bfs, guardians, goal = reset_level(LEVEL)
+            angle = 0 # Reset pacman angle
+            continue # Restart the loop for the new level state
         if astar.has_key and (astar.x, astar.y) == goal:
             renderer.show_win_message(screen, LEVEL)
             LEVEL = LEVEL + 1 if LEVEL < 3 else 1
