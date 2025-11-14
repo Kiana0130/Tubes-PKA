@@ -1,70 +1,149 @@
+import random
 from collections import deque
-import time
 
 class BFSAgent:
-    def __init__(self, x, y, keys, goal):
-        self.x = x
-        self.y = y
+    def __init__(self, start_x, start_y, keys, goal):
+        self.x = start_x
+        self.y = start_y
+        self.prev = (start_x, start_y)
+
         self.keys = keys
         self.goal = goal
         self.has_key = False
-        self.current_goal = keys[0] if keys else goal
-        self.current_path = None
+        self.alive = True
 
-    def _neighbors(self, x, y):
-        for dx,dy in [(1,0),(-1,0),(0,1),(0,-1)]: 
-                yield (x+dx,y+dy)
+        self.explored = set()
+        self.path = []
+        self.current_goal = None
+        self.finished = False
 
-    def find_path(self, grid, start, goal):
-        walk = {'.','S','G','K'}
+    def is_guardian_near(self, guardians, radius=3):
+        if not guardians:
+            return False
+        for g in guardians:
+            if abs(self.x - g.x) + abs(self.y - g.y) <= radius:
+                return True
+        return False
+
+    def get_avoid_direction(self, maze, guardians):
+        best = None
+        best_score = -1
+        for nx, ny in self._neighbors(self.x, self.y, maze):
+            score = sum([abs(nx - g.x) + abs(ny - g.y) for g in guardians])
+            if score > best_score:
+                best_score = score
+                best = (nx, ny)
+        return best
+
+    def _neighbors(self, x, y, maze):
+        moves = [(0,1),(1,0),(0,-1),(-1,0)]
+        random.shuffle(moves)
+        res = []
+        for dx, dy in moves:
+            nx, ny = x + dx, y + dy
+            if 0 <= ny < len(maze) and 0 <= nx < len(maze[0]):
+                if maze[ny][nx] != '#':
+                    res.append((nx, ny))
+        return res
+
+    def compute_path(self, maze):
+        start = (self.x, self.y)
+        goal = self.current_goal
+        if goal is None:
+            return []
         q = deque([start])
-        came = {start:None} 
+        came = {start: None}
         while q:
-            cx,cy = q.popleft()
-            if (cx,cy) == goal:
-                path=[(cx,cy)]
-                while came[(cx,cy)] is not None:
-                    cx,cy = came[(cx,cy)]
-                    path.append((cx,cy))
-                return path[::-1], len(came) 
-            
-            for nx,ny in self._neighbors(cx,cy):
-                if 0<=ny<len(grid) and 0<=nx<len(grid[0]):
-                    if grid[ny][nx] in walk and (nx,ny) not in came:
-                        came[(nx,ny)] = (cx,cy) 
-                        q.append((nx,ny))
-        return None, len(came)
+            cur = q.popleft()
+            if cur == goal:
+                break
+            for nb in self._neighbors(cur[0], cur[1], maze):
+                if nb not in came:
+                    came[nb] = cur
+                    q.append(nb)
+        if goal not in came:
+            return []
+        path = []
+        node = goal
+        while node != start:
+            path.append(node)
+            node = came[node]
+        path.reverse()
+        return path
 
-    def step(self, grid):
+    def _nearest_key(self):
+        if not self.keys:
+            return None
+        best = None
+        bestd = 1e9
+        for k in self.keys:
+            d = abs(self.x - k[0]) + abs(self.y - k[1])
+            if d < bestd:
+                bestd = d
+                best = k
+        return best
+
+    def step(self, maze, guardians):
+        """Single-tick update for BFS agent: no teleport, pathfind by BFS, fallback exploration, avoidance."""
+        if not self.alive:
+            return
+        if self.finished:
+            return
+
+        self.prev = (self.x, self.y)
+
+        self.explored.add((self.x, self.y))
+
         if not self.has_key and (self.x, self.y) in self.keys:
-            print("[BFS Agent] Mengambil Kunci!")
             self.has_key = True
+            try:
+                self.keys.remove((self.x, self.y))
+            except ValueError:
+                pass
+
+        if self.has_key:
             self.current_goal = self.goal
-            self.current_path = None 
-        if self.current_path is None:
-            start = (self.x, self.y)
-            start_time = time.perf_counter()
-            path_result = self.find_path(grid, start, self.current_goal)
-            end_time = time.perf_counter()
-            computation_time = end_time - start_time
-
-            if path_result[0]: 
-                path, explored_count = path_result
-                self.current_path = path[1:]
-                print("--- [BFS Agent] Menghitung Path Baru ---")
-                print(f"  > Target: {self.current_goal}")
-                print(f"  > 1. Waktu Komputasi: {computation_time:.8f} detik")
-                print(f"  > 2. Node Dieksplorasi: {explored_count} node")
-                print(f"  > 3. Panjang Path: {len(self.current_path)} langkah")
-                print("------------------------------------------")
-            else:
-                print("[BFS Agent] Tidak ada path ditemukan!")
-                self.current_path = []
-                return self.x, self.y
-
-        if self.current_path:
-            next_step = self.current_path.pop(0)
-            self.x, self.y = next_step
-            return self.x, self.y
         else:
-            return self.x, self.y
+            self.current_goal = self._nearest_key()
+
+        for g in guardians:
+            if (self.x, self.y) == (g.x, g.y):
+                return
+
+        if self.is_guardian_near(guardians, radius=1):
+            avoid = self.get_avoid_direction(maze, guardians)
+            if avoid is not None:
+                if avoid == self.prev:
+                    for nb in self._neighbors(self.x, self.y, maze):
+                        if nb != self.prev:
+                            avoid = nb
+                            break
+                self.x, self.y = avoid
+                self.explored.add((self.x, self.y))
+                return
+            else:
+                self.x, self.y = self.prev
+                return
+
+        self.path = self.compute_path(maze)
+        if self.path:
+            nx, ny = self.path[0]
+            self.x, self.y = nx, ny
+            self.explored.add((self.x, self.y))
+            if self.has_key and (self.x, self.y) == self.goal:
+                self.finished = True
+            return
+
+        neighbors = self._neighbors(self.x, self.y, maze)
+        for nb in neighbors:
+            if nb not in self.explored:
+                self.x, self.y = nb
+                self.explored.add((self.x, self.y))
+                return
+
+        if neighbors:
+            self.x, self.y = neighbors[0]
+            self.explored.add((self.x, self.y))
+
+        if self.has_key and (self.x, self.y) == self.goal:
+            self.finished = True
