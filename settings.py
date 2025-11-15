@@ -1,7 +1,7 @@
 LEVEL_SIZES = {
-  1: 16,
-  2: 32,
-  3: 64,
+  1: 20,
+  2: 40,
+  3: 60,
 }
 
 WINDOW_SIZE = 768
@@ -13,5 +13,6 @@ COLOR_GOAL = (50, 200, 50)
 COLOR_KEY = (235, 200, 60)
 
 NUM_KEYS = 2
+
 
 FPS = 60
