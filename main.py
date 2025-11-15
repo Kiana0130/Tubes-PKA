@@ -9,7 +9,7 @@ from Agen.BFS import BFSAgent
 
 pygame.init()
 
-LEVEL = 2
+LEVEL = 1
 
 # ==============================================
 # Warna gaya modern
@@ -294,3 +294,4 @@ def main():
 # ==============================================
 if __name__ == '__main__':
     main()
+
