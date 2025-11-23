@@ -17,7 +17,7 @@ class BFSAgent:
         self.current_goal = None
         self.finished = False
 
-    def is_guardian_near(self, guardians, radius=3):
+    def is_guardian_near(self, guardians, radius=1):
         if not guardians:
             return False
         for g in guardians:

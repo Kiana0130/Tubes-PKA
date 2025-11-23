@@ -121,7 +121,7 @@ class AStarAgent:
             self.current_goal = self.goal
         else:
             self.current_goal = self._nearest_key()
-        if self.is_guardian_near(guardians, radius=3):
+        if self.is_guardian_near(guardians, radius=1):
             avoid = self.get_avoid_direction(maze, guardians)
             if avoid is not None:
                 if avoid == self.prev:

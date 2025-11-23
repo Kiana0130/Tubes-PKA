@@ -39,53 +39,33 @@ def make_window():
     return screen
 
 def find_positions(grid):
-    """Menentukan start, goal, dan key dengan aman (auto start & auto goal jika hilang)."""
+    """Menentukan start, goal, dan key berdasarkan penanda grid 'S', 'G', dan 'K'."""
     h = len(grid)
     w = len(grid[0])
-
+    
+    start = None
     goal = None
     keys = []
-
+    
     for y, row in enumerate(grid):
         for x, val in enumerate(row):
-            if val == 'G':
+            if val == 'S':
+                start = (x, y)
+            elif val == 'G':
                 goal = (x, y)
             elif val == 'K':
                 keys.append((x, y))
 
-    walkable_edges = []
-    for y in range(h):
-        for x in range(w):
-            if grid[y][x] == '.':
-                if y == 1 or y == h-2:
-                    walkable_edges.append((x, y))
-                elif x == 1 or x == w-2:
-                    walkable_edges.append((x, y))
-
-    if walkable_edges:
-        start = random.choice(walkable_edges)
-    else:
-        walkable = [(x, y) for y in range(h) for x in range(w) if grid[y][x] == '.']
+    # Jika Start belum ditemukan (misalnya, jika generator teman Anda tidak menandai 'S' secara eksplisit)
+    if not start:
+        # Pengecekan aman di tepi atau sel pertama yang bisa dilalui
+        walkable = [(x, y) for y in range(h) for x in range(w) if grid[y][x] in ('.', 'G', 'K')]
         start = walkable[0] if walkable else (1, 1)
 
-    if not goal:
-        open_cells = [(x,y) for y in range(h) for x in range(w) if grid[y][x]=='.']
-
-        if open_cells:
-            import math
-            far = sorted([(x,y, math.dist((x,y), start)) for x,y in open_cells], key=lambda t: t[2], reverse=True)
-            goal = (far[0][0], far[0][1])
-            grid[goal[1]][goal[0]] = 'G'
-        else:
-            goal = (w - 2, h - 2)
-            grid[goal[1]][goal[0]] = 'G'
-            
-    if not keys:
-        open_cells = [(x,y) for y in range(h) for x in range(w) if grid[y][x]=='.' and (x,y) != start and (x,y) != goal]
-        if open_cells:
-            k = random.choice(open_cells)
-            grid[k[1]][k[0]] = 'K'
-            keys.append(k)
+    # Catatan: Karena generator teman Anda menjamin 'G' dan 'K' ada, 
+    # Anda tidak perlu lagi kode 'autofix' Goal dan Key yang kompleks di versi lama.
+    
+    return start, goal, keys
             
     return start, goal, keys
 
@@ -209,7 +189,7 @@ def main():
         size = map_generator.get_size_for_level(LEVEL)
         tile_size = settings.WINDOW_SIZE // size
 
-        screen.fill(settings.COLOR_BG)
+##        screen.fill(settings.COLOR_BG)
         draw_grid(screen, grid, tile_size)
 
         pygame.draw.circle(

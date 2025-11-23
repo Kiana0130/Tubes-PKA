@@ -6,7 +6,7 @@ class Guardian:
     def __init__(self, grid, start_pos, color):
         self.x, self.y = start_pos
         self.grid = grid
-        self.rows = len(grid)
+        self.rows = len(grid) 
         self.cols = len(grid[0])
         self.color = color
         self.state = 'SCOUTING'
@@ -93,7 +93,10 @@ class Guardian:
 
     def _minimax(self, guardian_pos, player_pos, depth, is_guardian_turn):
         if depth == 0 or guardian_pos == player_pos:
-            return self._heuristic(guardian_pos, player_pos)
+            if guardian_pos == player_pos:
+                return -math.inf
+            else:
+                return self._heuristic(guardian_pos, player_pos)
 
         if is_guardian_turn:
             min_eval = math.inf
@@ -134,7 +137,7 @@ class Guardian:
             if self.state == 'CHASING':
                 self.state = 'SCOUTING'
                 self.current_path = []
-        
+                
         if self.state == 'CHASING':
             next_move = self._find_best_move_minimax((player_x, player_y))
             self.x, self.y = next_move
