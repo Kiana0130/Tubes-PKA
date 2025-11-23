@@ -9,7 +9,7 @@ import random
 
 pygame.init()
 
-LEVEL = 1
+LEVEL = 2
 
 def draw_grid(screen, grid, tile_size):
     rows = len(grid)
