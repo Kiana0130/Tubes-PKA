@@ -16,6 +16,8 @@ class BFSAgent:
         self.path = []
         self.current_goal = None
         self.finished = False
+        # MODIFIKASI: Menambahkan penghitung langkah
+        self.current_run_steps = 0
 
     def is_guardian_near(self, guardians, radius=1):
         if not guardians:
@@ -91,7 +93,6 @@ class BFSAgent:
             return
 
         self.prev = (self.x, self.y)
-
         self.explored.add((self.x, self.y))
 
         if not self.has_key and (self.x, self.y) in self.keys:
@@ -120,6 +121,9 @@ class BFSAgent:
                             break
                 self.x, self.y = avoid
                 self.explored.add((self.x, self.y))
+                # MODIFIKASI: Increment langkah setelah move menghindari guardian
+                if (self.x, self.y) != self.prev:
+                    self.current_run_steps += 1
                 return
             else:
                 self.x, self.y = self.prev
@@ -130,6 +134,9 @@ class BFSAgent:
             nx, ny = self.path[0]
             self.x, self.y = nx, ny
             self.explored.add((self.x, self.y))
+            # MODIFIKASI: Increment langkah setelah move pathing
+            self.current_run_steps += 1
+            
             if self.has_key and (self.x, self.y) == self.goal:
                 self.finished = True
             return
@@ -139,11 +146,15 @@ class BFSAgent:
             if nb not in self.explored:
                 self.x, self.y = nb
                 self.explored.add((self.x, self.y))
+                # MODIFIKASI: Increment langkah setelah move eksplorasi
+                self.current_run_steps += 1
                 return
 
         if neighbors:
             self.x, self.y = neighbors[0]
             self.explored.add((self.x, self.y))
+            # MODIFIKASI: Increment langkah setelah move fallback
+            self.current_run_steps += 1
 
         if self.has_key and (self.x, self.y) == self.goal:
             self.finished = True

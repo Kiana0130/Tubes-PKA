@@ -2,7 +2,7 @@
 import pygame
 import math
 import sys
-import settings
+from core import settings
 
 def draw_modern_grid(screen, grid, tile_size):
     rows = len(grid)

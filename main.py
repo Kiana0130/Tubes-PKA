@@ -6,10 +6,106 @@ from core import settings
 from Agen.A_Star import AStarAgent
 from Agen.BFS import BFSAgent
 import random
+import copy 
 
 pygame.init()
 
 LEVEL = 1
+
+# START MODIFIKASI: Variabel Global untuk Tracking Loop dan Statistik
+LOOP_COUNT = 1
+# all_loops_stats akan menyimpan daftar statistik untuk setiap loop
+all_loops_stats = []
+
+def init_new_loop_stats(loop_num):
+    """Menginisialisasi struktur data untuk loop baru."""
+    return {
+        'loop_number': loop_num,
+        'AStar': {'finish_steps': {}, 'deaths': 0, 'total_steps': 0}, # finish_steps menggunakan dict {level: steps}
+        'BFS': {'finish_steps': {}, 'deaths': 0, 'total_steps': 0}
+    }
+
+def print_loop_summary(loop_data):
+    """Mencetak ringkasan untuk satu loop (L1-L3) yang telah selesai."""
+    loop_num = loop_data['loop_number']
+    stats = loop_data
+    
+    astar_wins = len(stats['AStar']['finish_steps'])
+    bfs_wins = len(stats['BFS']['finish_steps'])
+    
+    print("\n" + "═"*70)
+    print(f"             RANGKUMAN LOOP KE-{loop_num} (LEVEL 1-3)")
+    print("═"*70)
+    
+    # Jumlah Kemenangan Level Per Loop
+    print("\n--- Jumlah Kemenangan Level Per Loop ---")
+    print(f"{'A* Agent':<15}: {astar_wins} level diselesaikan")
+    print(f"{'BFS Agent':<15}: {bfs_wins} level diselesaikan")
+
+    # 1. Waktu sampai garis finish (Per Level)
+    print("\n--- Waktu Sampai Finish (Total Ticks Per Level yang Selesai) ---")
+    
+    print(f"{'A* Agent':<15}: Total {astar_wins}/{3} level diselesaikan.")
+    for level in range(1, 4):
+        steps = stats['AStar']['finish_steps'].get(level, 'N/A')
+        print(f"{'':<15} Level {level}: {steps} ticks")
+        
+    print(f"{'BFS Agent':<15}: Total {bfs_wins}/{3} level diselesaikan.")
+    for level in range(1, 4):
+        steps = stats['BFS']['finish_steps'].get(level, 'N/A')
+        print(f"{'':<15} Level {level}: {steps} ticks")
+
+    # 2. Jumlah mati/tertangkap
+    print("\n--- Jumlah Mati/Tertangkap Guardian ---")
+    print(f"{'A* Agent':<15}: {stats['AStar']['deaths']} kali")
+    print(f"{'BFS Agent':<15}: {stats['BFS']['deaths']} kali")
+
+    # 3. Biaya perjalanan (Total Langkah Bergerak)
+    print("\n--- Total Biaya Perjalanan (Akumulasi Langkah Bergerak L1-L3) ---")
+    print(f"A* Agent: {stats['AStar']['total_steps']} langkah")
+    print(f"BFS Agent: {stats['BFS']['total_steps']} langkah")
+    
+    print("═"*70)
+
+def print_final_summary(all_data):
+    """Mencetak ringkasan dari semua loop (loop yang selesai dan loop yang sedang berjalan)."""
+    
+    # Hitung total statistik
+    total_astar_deaths = sum(d['AStar']['deaths'] for d in all_data)
+    total_bfs_deaths = sum(d['BFS']['deaths'] for d in all_data)
+    total_astar_steps = sum(d['AStar']['total_steps'] for d in all_data)
+    total_bfs_steps = sum(d['BFS']['total_steps'] for d in all_data)
+    total_astar_wins = sum(len(d['AStar']['finish_steps']) for d in all_data)
+    total_bfs_wins = sum(len(d['BFS']['finish_steps']) for d in all_data)
+    
+    # MODIFIKASI: Ambil jumlah loop
+    total_loops = len(all_data)
+    
+    print("\n" + "█"*70)
+    print("             RINGKASAN AKHIR KESELURUHAN PERMAINAN")
+    # MODIFIKASI: Tambahkan informasi jumlah loop
+    print(f"                 Total {total_loops} Loop Dicatat")
+    print("█"*70)
+    
+    for loop_data in all_data:
+        print_loop_summary(loop_data)
+
+    print("\n" + "▓"*70)
+    print("             TOTAL AKUMULASI SEMUA LOOP")
+    print("▓"*70)
+    
+    # TAMBAHAN: Tampilkan Total Kemenangan
+    print(f"{'Total Loop Selesai':<25}: {total_loops} kali") # MODIFIKASI: Tampilkan Total Loop
+    print(f"{'Total A* Menang':<25}: {total_astar_wins} kali")
+    print(f"{'Total BFS Menang':<25}: {total_bfs_wins} kali")
+    
+    print(f"{'Total A* Mati':<25}: {total_astar_deaths} kali")
+    print(f"{'Total BFS Mati':<25}: {total_bfs_deaths} kali")
+    print(f"{'Total A* Langkah':<25}: {total_astar_steps} langkah")
+    print(f"{'Total BFS Langkah':<25}: {total_bfs_steps} langkah")
+    print("▓"*70)
+# END MODIFIKASI
+
 
 def draw_grid(screen, grid, tile_size):
     rows = len(grid)
@@ -56,19 +152,12 @@ def find_positions(grid):
             elif val == 'K':
                 keys.append((x, y))
 
-    # Jika Start belum ditemukan (misalnya, jika generator teman Anda tidak menandai 'S' secara eksplisit)
     if not start:
-        # Pengecekan aman di tepi atau sel pertama yang bisa dilalui
         walkable = [(x, y) for y in range(h) for x in range(w) if grid[y][x] in ('.', 'G', 'K')]
         start = walkable[0] if walkable else (1, 1)
 
-    # Catatan: Karena generator teman Anda menjamin 'G' dan 'K' ada, 
-    # Anda tidak perlu lagi kode 'autofix' Goal dan Key yang kompleks di versi lama.
-    
     return start, goal, keys
             
-    return start, goal, keys
-
 def spawn_guardians(grid, level, forbidden_positions):
     rows = len(grid)
     cols = len(grid[0])
@@ -77,7 +166,7 @@ def spawn_guardians(grid, level, forbidden_positions):
     while len(guardians) < level and tries < 2000:
         tries += 1
         x = random.randint(1, cols-2)
-        y = random.randint(1, rows-2)
+        y = random.randint(0, rows-2)
         if grid[y][x] != '.':
             continue
         if (x,y) in forbidden_positions:
@@ -90,45 +179,56 @@ def spawn_guardians(grid, level, forbidden_positions):
     return guardians
 
 def main():
-    global LEVEL
+    global LEVEL, all_loops_stats, LOOP_COUNT 
     clock = pygame.time.Clock()
+
+    all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
+    current_loop_data = all_loops_stats[LOOP_COUNT - 1]
 
     grid = map_generator.generate_maze(LEVEL)
     screen = make_window()
 
     start, goal, keys = find_positions(grid)
 
-    astar = AStarAgent(start[0], start[1], keys, goal)
-    bfs = BFSAgent(start[0], start[1], keys, goal)
+    astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
+    bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
     
     forbidden = [start, goal] + keys
     guardians = spawn_guardians(grid, LEVEL, forbidden)
     
     running = True
 
+    game_steps = 0
+
     while running:
         for event in pygame.event.get():
-            if event.type == pygame.QUIT:
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_q)):
                 running = False
+                if astar.alive and not astar.finished:
+                    current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+                if bfs.alive and not bfs.finished:
+                    current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                    running = False
-
-                elif event.key == pygame.K_r:
+                if event.key == pygame.K_r:
+                    game_steps = 0
                     grid = map_generator.generate_maze(LEVEL)
                     start, goal, keys = find_positions(grid)
-                    astar = AStarAgent(start[0], start[1], keys, goal)
-                    bfs = BFSAgent(start[0], start[1], keys, goal)
+                    astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
+                    bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
                     guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
 
                 elif event.key == pygame.K_n:
                     LEVEL = LEVEL + 1 if LEVEL < 3 else 1
+                    
+                    game_steps = 0
                     grid = map_generator.generate_maze(LEVEL)
                     start, goal, keys = find_positions(grid)
-                    astar = AStarAgent(start[0], start[1], keys, goal)
-                    bfs = BFSAgent(start[0], start[1], keys, goal)
+                    astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
+                    bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
                     guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
+
+        game_steps += 1 
 
         for g in guardians:
             d_ast = abs(g.x - astar.x) + abs(g.y - astar.y) if astar.alive else 9999
@@ -146,45 +246,63 @@ def main():
         astar.step(grid, guardians)
         bfs.step(grid, guardians)
         
+        re_initialize = False
+        
         for g in guardians:
             if astar.alive and (astar.x, astar.y) == (g.x, g.y):
-                print("A* Mati")
+                print(f"[Level {LEVEL}] A* Mati")
                 astar.alive = False
+                current_loop_data['AStar']['deaths'] += 1
 
             if bfs.alive and (bfs.x, bfs.y) == (g.x, g.y):
-                print("BFS Mati")
+                print(f"[Level {LEVEL}] BFS Mati")
                 bfs.alive = False
+                current_loop_data['BFS']['deaths'] += 1
                 
         if not astar.alive and not bfs.alive:
-            print("Guardian menang di level", LEVEL)
+            print(f"Guardian menang di level {LEVEL}")
+            
+            current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+            current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+            
+            re_initialize = True
+            
+        elif astar.has_key and (astar.x, astar.y) == goal:
+            print(f"A* menang level {LEVEL}")
+            
+            current_loop_data['AStar']['finish_steps'][LEVEL] = game_steps
+            current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+
+            re_initialize = True
+
+        elif bfs.has_key and (bfs.x, bfs.y) == goal:
+            print(f"BFS menang level {LEVEL}")
+            
+            current_loop_data['BFS']['finish_steps'][LEVEL] = game_steps
+            current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+
+            re_initialize = True
+            
+        if re_initialize:
+            is_loop_complete = LEVEL == 3 
             
             LEVEL = LEVEL + 1 if LEVEL < 3 else 1
+            
+            if is_loop_complete:
+                print_loop_summary(current_loop_data) 
+                
+                LOOP_COUNT += 1
+                all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
+                current_loop_data = all_loops_stats[LOOP_COUNT - 1]
+            
+            game_steps = 0
             grid = map_generator.generate_maze(LEVEL)
             start, goal, keys = find_positions(grid)
-            astar = AStarAgent(start[0], start[1], keys, goal)
-            bfs = BFSAgent(start[0], start[1], keys, goal)
-            guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
-            continue
-    
-        if astar.has_key and (astar.x, astar.y) == goal:
-            print("A* menang level", LEVEL)
-            LEVEL = LEVEL + 1 if LEVEL < 3 else 1
-            grid = map_generator.generate_maze(LEVEL)
-            start, goal, keys = find_positions(grid)
-            astar = AStarAgent(start[0], start[1], keys, goal)
-            bfs = BFSAgent(start[0], start[1], keys, goal)
+            astar = AStarAgent(start[0], start[1], copy.copy(keys), goal) 
+            bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
             guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
             continue
 
-        if bfs.has_key and (bfs.x, bfs.y) == goal:
-            print("BFS menang level", LEVEL)
-            LEVEL = LEVEL + 1 if LEVEL < 3 else 1
-            grid = map_generator.generate_maze(LEVEL)
-            start, goal, keys = find_positions(grid)
-            astar = AStarAgent(start[0], start[1], keys, goal)
-            bfs = BFSAgent(start[0], start[1], keys, goal)
-            guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
-            continue
 
         size = map_generator.get_size_for_level(LEVEL)
         tile_size = settings.WINDOW_SIZE // size
@@ -221,6 +339,8 @@ def main():
 
         pygame.display.flip()
         clock.tick(settings.FPS)
+
+    print_final_summary(all_loops_stats)
 
     pygame.quit()
     sys.exit()

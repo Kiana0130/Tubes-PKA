@@ -16,6 +16,8 @@ class AStarAgent:
         self.path = []
         self.current_goal = None
         self.finished = False
+        # MODIFIKASI: Menambahkan penghitung langkah
+        self.current_run_steps = 0
 
     def is_guardian_near(self, guardians, radius=1):
         if not guardians:
@@ -109,18 +111,22 @@ class AStarAgent:
             return
         if self.finished:
             return
+            
         self.prev = (self.x, self.y)
         self.explored.add((self.x, self.y))
+        
         if not self.has_key and (self.x, self.y) in self.keys:
             self.has_key = True
             try:
                 self.keys.remove((self.x, self.y))
             except ValueError:
                 pass
+                
         if self.has_key:
             self.current_goal = self.goal
         else:
             self.current_goal = self._nearest_key()
+            
         if self.is_guardian_near(guardians, radius=1):
             avoid = self.get_avoid_direction(maze, guardians)
             if avoid is not None:
@@ -131,15 +137,22 @@ class AStarAgent:
                             break
                 self.x, self.y = avoid
                 self.explored.add((self.x, self.y))
+                # MODIFIKASI: Increment langkah setelah move menghindari guardian
+                if (self.x, self.y) != self.prev:
+                    self.current_run_steps += 1
                 return
             else:
                 self.x, self.y = self.prev
                 return
+                
         self.path = self.compute_path(maze)
         if self.path:
             nx, ny = self.path[0]
             self.x, self.y = nx, ny
             self.explored.add((self.x, self.y))
+            # MODIFIKASI: Increment langkah setelah move pathing
+            self.current_run_steps += 1
+            
         else:
             neighbors = self._neighbors(self.x, self.y, maze)
             moved = False
@@ -148,10 +161,15 @@ class AStarAgent:
                     self.x, self.y = nb
                     self.explored.add((self.x, self.y))
                     moved = True
+                    # MODIFIKASI: Increment langkah setelah move eksplorasi
+                    self.current_run_steps += 1 
                     break
             if not moved and neighbors:
                 self.x, self.y = neighbors[0]
                 self.explored.add((self.x, self.y))
+                # MODIFIKASI: Increment langkah setelah move fallback
+                self.current_run_steps += 1
+                
 
         if self.has_key and (self.x, self.y) == self.goal:
             self.finished = True
