@@ -78,12 +78,10 @@ def print_final_summary(all_data):
     total_astar_wins = sum(len(d['AStar']['finish_steps']) for d in all_data)
     total_bfs_wins = sum(len(d['BFS']['finish_steps']) for d in all_data)
     
-    # MODIFIKASI: Ambil jumlah loop
     total_loops = len(all_data)
     
     print("\n" + "█"*70)
     print("             RINGKASAN AKHIR KESELURUHAN PERMAINAN")
-    # MODIFIKASI: Tambahkan informasi jumlah loop
     print(f"                 Total {total_loops} Loop Dicatat")
     print("█"*70)
     
@@ -94,8 +92,8 @@ def print_final_summary(all_data):
     print("             TOTAL AKUMULASI SEMUA LOOP")
     print("▓"*70)
     
-    # TAMBAHAN: Tampilkan Total Kemenangan
-    print(f"{'Total Loop Selesai':<25}: {total_loops} kali") # MODIFIKASI: Tampilkan Total Loop
+    # Tampilkan Total Loop, Kemenangan, Kematian, dan Langkah
+    print(f"{'Total Loop Selesai':<25}: {total_loops} kali") 
     print(f"{'Total A* Menang':<25}: {total_astar_wins} kali")
     print(f"{'Total BFS Menang':<25}: {total_bfs_wins} kali")
     
@@ -246,8 +244,7 @@ def main():
         astar.step(grid, guardians)
         bfs.step(grid, guardians)
         
-        re_initialize = False
-        
+        # 1. Cek Kematian (Sets agent.alive = False dan increments 'deaths')
         for g in guardians:
             if astar.alive and (astar.x, astar.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] A* Mati")
@@ -259,30 +256,39 @@ def main():
                 bfs.alive = False
                 current_loop_data['BFS']['deaths'] += 1
                 
-        if not astar.alive and not bfs.alive:
-            print(f"Guardian menang di level {LEVEL}")
+        # 2. Cek Kondisi Selesai/Settled
+        # Settled: Agen sudah Menang (finished=True) atau sudah Mati (!alive)
+        astar_settled = astar.finished or not astar.alive
+        bfs_settled = bfs.finished or not bfs.alive
+        
+        re_initialize = False
+        
+        if astar_settled and bfs_settled:
+            re_initialize = True
             
+            # 3. Akumulasi Statistik (Dilakukan hanya sekali ketika level berakhir)
+            
+            # A* Stats
             current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+            if astar.finished:
+                current_loop_data['AStar']['finish_steps'][LEVEL] = game_steps
+                
+            # BFS Stats
             current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
-            
-            re_initialize = True
-            
-        elif astar.has_key and (astar.x, astar.y) == goal:
-            print(f"A* menang level {LEVEL}")
-            
-            current_loop_data['AStar']['finish_steps'][LEVEL] = game_steps
-            current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+            if bfs.finished:
+                current_loop_data['BFS']['finish_steps'][LEVEL] = game_steps
+                
+            # Pesan Hasil
+            if astar.finished and bfs.finished:
+                print(f"Kedua Agen menang di level {LEVEL}")
+            elif astar.finished:
+                print(f"A* menang, BFS gagal/mati di level {LEVEL}")
+            elif bfs.finished:
+                print(f"BFS menang, A* gagal/mati di level {LEVEL}")
+            else: # Keduanya !alive (mati/gagal)
+                print(f"Guardian menang di level {LEVEL}")
 
-            re_initialize = True
-
-        elif bfs.has_key and (bfs.x, bfs.y) == goal:
-            print(f"BFS menang level {LEVEL}")
-            
-            current_loop_data['BFS']['finish_steps'][LEVEL] = game_steps
-            current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
-
-            re_initialize = True
-            
+        # 4. Transisi Level
         if re_initialize:
             is_loop_complete = LEVEL == 3 
             
