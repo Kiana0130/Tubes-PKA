@@ -21,8 +21,9 @@ def init_new_loop_stats(loop_num):
     """Menginisialisasi struktur data untuk loop baru."""
     return {
         'loop_number': loop_num,
-        'AStar': {'finish_steps': {}, 'deaths': 0, 'total_steps': 0}, # finish_steps menggunakan dict {level: steps}
-        'BFS': {'finish_steps': {}, 'deaths': 0, 'total_steps': 0}
+        # Mengganti 'finish_steps' dengan 'level_results' untuk menyimpan status (FINISHED, DIED, QUIT) dan langkah
+        'AStar': {'level_results': {}, 'deaths': 0, 'total_steps': 0}, 
+        'BFS': {'level_results': {}, 'deaths': 0, 'total_steps': 0}
     }
 
 def print_loop_summary(loop_data):
@@ -30,8 +31,9 @@ def print_loop_summary(loop_data):
     loop_num = loop_data['loop_number']
     stats = loop_data
     
-    astar_wins = len(stats['AStar']['finish_steps'])
-    bfs_wins = len(stats['BFS']['finish_steps'])
+    # Hitung jumlah kemenangan dari level_results
+    astar_wins = sum(1 for res in stats['AStar']['level_results'].values() if res['status'] == 'FINISHED')
+    bfs_wins = sum(1 for res in stats['BFS']['level_results'].values() if res['status'] == 'FINISHED')
     
     print("\n" + "═"*70)
     print(f"             RANGKUMAN LOOP KE-{loop_num} (LEVEL 1-3)")
@@ -42,18 +44,30 @@ def print_loop_summary(loop_data):
     print(f"{'A* Agent':<15}: {astar_wins} level diselesaikan")
     print(f"{'BFS Agent':<15}: {bfs_wins} level diselesaikan")
 
-    # 1. Waktu sampai garis finish (Per Level)
-    print("\n--- Waktu Sampai Finish (Total Ticks Per Level yang Selesai) ---")
+    # 1. Hasil dan Langkah Per Level
+    print("\n--- Hasil dan Langkah Per Level ---")
+    
+    status_map = {'FINISHED': 'MENANG', 'DIED': 'MATI', 'QUIT': 'TIDAK SELESAI (Keluar)'}
     
     print(f"{'A* Agent':<15}: Total {astar_wins}/{3} level diselesaikan.")
     for level in range(1, 4):
-        steps = stats['AStar']['finish_steps'].get(level, 'N/A')
-        print(f"{'':<15} Level {level}: {steps} ticks")
+        result = stats['AStar']['level_results'].get(level)
+        if result:
+            status = status_map.get(result['status'], result['status'])
+            # Catat langkah/ticks untuk SEMUA status
+            print(f"{'':<15} Level {level}: {status} ({result['steps']} ticks)")
+        else:
+            print(f"{'':<15} Level {level}: Belum Dimainkan")
         
     print(f"{'BFS Agent':<15}: Total {bfs_wins}/{3} level diselesaikan.")
     for level in range(1, 4):
-        steps = stats['BFS']['finish_steps'].get(level, 'N/A')
-        print(f"{'':<15} Level {level}: {steps} ticks")
+        result = stats['BFS']['level_results'].get(level)
+        if result:
+            status = status_map.get(result['status'], result['status'])
+            # Catat langkah/ticks untuk SEMUA status
+            print(f"{'':<15} Level {level}: {status} ({result['steps']} ticks)")
+        else:
+            print(f"{'':<15} Level {level}: Belum Dimainkan")
 
     # 2. Jumlah mati/tertangkap
     print("\n--- Jumlah Mati/Tertangkap Guardian ---")
@@ -75,8 +89,10 @@ def print_final_summary(all_data):
     total_bfs_deaths = sum(d['BFS']['deaths'] for d in all_data)
     total_astar_steps = sum(d['AStar']['total_steps'] for d in all_data)
     total_bfs_steps = sum(d['BFS']['total_steps'] for d in all_data)
-    total_astar_wins = sum(len(d['AStar']['finish_steps']) for d in all_data)
-    total_bfs_wins = sum(len(d['BFS']['finish_steps']) for d in all_data)
+    
+    # Hitung total kemenangan dari level_results
+    total_astar_wins = sum(sum(1 for res in d['AStar']['level_results'].values() if res['status'] == 'FINISHED') for d in all_data)
+    total_bfs_wins = sum(sum(1 for res in d['BFS']['level_results'].values() if res['status'] == 'FINISHED') for d in all_data)
     
     total_loops = len(all_data)
     
@@ -86,14 +102,16 @@ def print_final_summary(all_data):
     print("█"*70)
     
     for loop_data in all_data:
-        print_loop_summary(loop_data)
+        # Hanya tampilkan ringkasan loop jika ada data hasil level
+        if loop_data['AStar']['level_results'] or loop_data['BFS']['level_results']:
+            print_loop_summary(loop_data)
 
     print("\n" + "▓"*70)
     print("             TOTAL AKUMULASI SEMUA LOOP")
     print("▓"*70)
     
     # Tampilkan Total Loop, Kemenangan, Kematian, dan Langkah
-    print(f"{'Total Loop Selesai':<25}: {total_loops} kali") 
+    print(f"{'Total Loop Dicatat':<25}: {total_loops} kali") 
     print(f"{'Total A* Menang':<25}: {total_astar_wins} kali")
     print(f"{'Total BFS Menang':<25}: {total_bfs_wins} kali")
     
@@ -202,14 +220,51 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_q)):
                 running = False
-                if astar.alive and not astar.finished:
-                    current_loop_data['AStar']['total_steps'] += astar.current_run_steps
-                if bfs.alive and not bfs.finished:
-                    current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+                
+                # Penanganan Logika FINISHED/QUIT saat Quit (ESC/Q)
+                
+                # Logic untuk A* Agent
+                current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+                
+                if LEVEL not in current_loop_data['AStar']['level_results']:
+                    if astar.finished:
+                        current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
+                    elif astar.alive:
+                        current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': game_steps}
+
+                # Logic untuk BFS Agent
+                current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+                
+                if LEVEL not in current_loop_data['BFS']['level_results']:
+                    if bfs.finished:
+                        current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
+                    elif bfs.alive:
+                        current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': game_steps}
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
+                    # Reset game steps counter for display
                     game_steps = 0
+                    
+                    for agent_name in ['AStar', 'BFS']:
+                        stats = current_loop_data[agent_name]
+                        if LEVEL in stats['level_results']:
+                            result = stats['level_results'][LEVEL]
+                            
+                            # 1. Koreksi death count jika statusnya DIED
+                            if result['status'] == 'DIED':
+                                # Kematian ini sudah ditambahkan ke deaths (saat agent tertangkap). Kurangi.
+                                stats['deaths'] -= 1
+                            
+                            # 2. Koreksi total_steps jika level ini sudah dicatat langkahnya
+                            if result['status'] == 'QUIT':
+                                # Langkah QUIT sudah ditambahkan ke total_steps (saat K_n atau ESC/Q). Kurangi.
+                                stats['total_steps'] -= result['steps']
+                            
+                            # 3. Hapus hasil level saat ini
+                            del stats['level_results'][LEVEL]
+                            
+                    # Re-initialize agents and map
                     grid = map_generator.generate_maze(LEVEL)
                     start, goal, keys = find_positions(grid)
                     astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
@@ -217,6 +272,16 @@ def main():
                     guardians = spawn_guardians(grid, LEVEL, [start, goal] + keys)
 
                 elif event.key == pygame.K_n:
+                    # Logic untuk kasus transisi level normal
+                    # Akumulasi langkah dan set status QUIT jika agen belum selesai
+                    if astar.alive and not astar.finished:
+                         current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+                         current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': astar.current_run_steps}
+                    if bfs.alive and not bfs.finished:
+                         current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+                         current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': bfs.current_run_steps}
+                    
+                    # Lanjut ke level berikutnya
                     LEVEL = LEVEL + 1 if LEVEL < 3 else 1
                     
                     game_steps = 0
@@ -250,11 +315,17 @@ def main():
                 print(f"[Level {LEVEL}] A* Mati")
                 astar.alive = False
                 current_loop_data['AStar']['deaths'] += 1
+                # Catat status DIED dan langkah/ticks
+                if not astar.finished and LEVEL not in current_loop_data['AStar']['level_results']:
+                    current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'DIED', 'steps': game_steps}
 
             if bfs.alive and (bfs.x, bfs.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] BFS Mati")
                 bfs.alive = False
                 current_loop_data['BFS']['deaths'] += 1
+                # Catat status DIED dan langkah/ticks
+                if not bfs.finished and LEVEL not in current_loop_data['BFS']['level_results']:
+                    current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'DIED', 'steps': game_steps}
                 
         # 2. Cek Kondisi Selesai/Settled
         # Settled: Agen sudah Menang (finished=True) atau sudah Mati (!alive)
@@ -269,14 +340,23 @@ def main():
             # 3. Akumulasi Statistik (Dilakukan hanya sekali ketika level berakhir)
             
             # A* Stats
-            current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+            # Akumulasi total langkah bergerak agent. Pastikan hanya diakumulasi sekali per level!
+            # Akumulasi hanya jika level belum terekam sebagai FINISHED atau DIED (atau jika DIED yang akan diganti FINISHED)
+            if LEVEL not in current_loop_data['AStar']['level_results'] or current_loop_data['AStar']['level_results'][LEVEL]['status'] in ('DIED', 'QUIT'):
+                current_loop_data['AStar']['total_steps'] += astar.current_run_steps
+            
             if astar.finished:
-                current_loop_data['AStar']['finish_steps'][LEVEL] = game_steps
+                # Catat status FINISHED dan langkah/ticks
+                current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
                 
             # BFS Stats
-            current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+            # Akumulasi total langkah bergerak agent. Pastikan hanya diakumulasi sekali per level!
+            if LEVEL not in current_loop_data['BFS']['level_results'] or current_loop_data['BFS']['level_results'][LEVEL]['status'] in ('DIED', 'QUIT'):
+                current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
+
             if bfs.finished:
-                current_loop_data['BFS']['finish_steps'][LEVEL] = game_steps
+                # Catat status FINISHED dan langkah/ticks
+                current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
                 
             # Pesan Hasil
             if astar.finished and bfs.finished:
