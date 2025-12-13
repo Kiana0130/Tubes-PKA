@@ -1,6 +1,8 @@
 import heapq
 import math
 import random
+import time
+from collections import deque
 
 class AStarAgent:
     def __init__(self, start_x, start_y, keys, goal):
@@ -27,6 +29,14 @@ class AStarAgent:
         
         self.latest_scan = []
         self.just_replanned = False
+        
+        self.total_compute_time = 0.0  
+        self.last_compute_time = 0.0  
+        self.compute_counts = 0
+        
+        self.position_history = deque(maxlen=6) 
+        self.patience = 5                       
+        self.rush_mode = False
 
     def scan_surroundings(self, maze, specific_radius=None):
         """Mengecek area sekitar untuk mencari Key atau Goal"""
@@ -49,7 +59,10 @@ class AStarAgent:
                     found_something_new = True
                     # print(f"A* Agent melihat GOAL di {(x, y)}!")
         
-        return found_something_new
+        return super().scan_surroundings(maze, specific_radius) if hasattr(super(), 'scan_surroundings') else self._original_scan(maze, specific_radius)
+    
+    def _original_scan(self, maze, specific_radius=None):
+        pass
 
     def is_guardian_near(self, guardians, radius=1):
         if not guardians:
@@ -87,7 +100,8 @@ class AStarAgent:
         weight = 1.5
         return abs(a[0]-b[0]) + abs(a[1]-b[1])
 
-    def compute_path(self, maze, target, guardians=[], visualize=True):
+    def compute_path(self, maze, target, guardians=[], visualize=True, ignore_danger=False):
+        start_timer = time.perf_counter()
         if visualize:
             self.latest_scan = []
             self.just_replanned = True
@@ -97,12 +111,13 @@ class AStarAgent:
         
         
         danger_zone = set()
-        if guardians:
+        if guardians and not ignore_danger:
             for g in guardians:
                 for dy in range(-3, 4):
                     for dx in range(-3, 4):
                         if abs(dx) + abs(dy) <= 3:
                             danger_zone.add((g.x + dx, g.y + dy))
+                            
         open_set = []
         heapq.heappush(open_set, (0, 0, start))
         came_from = {start: None}
@@ -126,9 +141,15 @@ class AStarAgent:
                 tentative = gscore[current] + 1 + extra_cost
                 if nb not in gscore or tentative < gscore[nb]:
                     gscore[nb] = tentative
-                    priority = tentative + (self._heuristic(nb, goal)* 1.5) + random.uniform(0, 0.2)
+                    priority = tentative + (self._heuristic(nb, goal) * 1.5)
                     heapq.heappush(open_set, (priority, tentative, nb))
                     came_from[nb] = current
+
+        end_timer = time.perf_counter() # STOP TIMER
+        execution_time = (end_timer - start_timer) * 1000 # Konversi ke ms
+        self.last_compute_time = execution_time
+        self.total_compute_time += execution_time
+        self.compute_counts += 1
 
         if goal not in came_from:
             return []
@@ -154,6 +175,20 @@ class AStarAgent:
             return random.choice(neighbors)
             
         return (self.x, self.y)
+    
+    def check_deadlock(self):
+        """Mendeteksi apakah agen bolak-balik di tempat yang sama (panik)."""
+        self.position_history.append((self.x, self.y))
+        
+        if len(self.position_history) < 6:
+            return False
+            
+        # Jika dalam 6 langkah terakhir jumlah posisi uniknya sedikit (misal cuma 2 atau 3)
+        # Berarti dia cuma bolak-balik A-B-A-B atau A-B-C-B-A
+        unique_pos = set(self.position_history)
+        if len(unique_pos) <= 3:
+            return True
+        return False
 
     def step(self, maze, guardians):
         if not self.alive or self.finished:
@@ -171,7 +206,17 @@ class AStarAgent:
 
         # Scan rutin (radius pendek) - TIDAK BOLEH MEMICU ANIMASI
         found_new_info = self.scan_surroundings(maze) 
-        
+        is_stuck = self.check_deadlock()
+        if is_stuck:
+            self.patience -= 1
+            # print(f"A* Frustasi... Kesabaran: {self.patience}")
+        else:
+            self.patience = 5 # Reset jika bergerak lancar
+            self.rush_mode = False
+
+        if self.patience <= 0:
+            self.rush_mode = True # AKTIFKAN MODE NEKAT
+            # print("A* MARAH! Menerobos Danger Zone!")
         current_target = None
         
         # 2. TENTUKAN TARGET
@@ -185,6 +230,8 @@ class AStarAgent:
                 
                 # Visualisasi Scan Pintu (Hanya saat momen dapat kunci)
                 self.scan_surroundings(maze, specific_radius=999) 
+                self.position_history.clear()
+                self.patience = 5
                 
                 if self.memory_goal:
                     current_target = self.memory_goal
@@ -203,34 +250,32 @@ class AStarAgent:
 
         # 3. LOGIKA MENGHINDAR (PRIORITAS TERTINGGI)
         # Gunakan if-elif-else agar logika di bawahnya tidak menimpa hasil menghindar
-        if self.is_guardian_near(guardians, radius=2):
+        must_avoid = self.is_guardian_near(guardians, radius=2)
+        if self.rush_mode:
+            must_avoid = False
+        if must_avoid:
             avoid_pos = self.get_avoid_direction(maze, guardians)
             if avoid_pos:
                 self.prev = (self.x, self.y)
                 self.x, self.y = avoid_pos
                 self.current_run_steps += 1
                 
-                # Silent Replan (Tanpa Visualisasi)
                 if current_target:
+                    # Replan tanpa visualisasi
                     self.path = self.compute_path(maze, current_target, guardians, visualize=False)
                 else:
                     self.path = []
-                return # Langsung keluar agar tidak ditimpa logika di bawah
+                return
 
-        # 4. PATHFINDING RUTIN (JALAN MENUJU TARGET)
-        # Hanya hitung ulang jika ada info baru ATAU path habis
-        if found_new_info or not self.path:
+        # 4. PATHFINDING RUTIN
+        if found_new_info or not self.path or (self.rush_mode and is_stuck):
             if current_target:
-                # PERBAIKAN UTAMA: visualize=False untuk pergerakan rutin!
-                # Kita sudah scan global di awal, jadi pergerakan biasa tidak perlu animasi scan lagi.
-                # Kecuali kamu benar-benar ingin melihat scan setiap langkah, biarkan False.
                 do_visualize = False 
-                
-                # Opsional: Jika path kosong total (awal game), boleh visualize True
                 if self.current_run_steps == 0:
                     do_visualize = True
 
-                self.path = self.compute_path(maze, current_target, guardians, visualize=do_visualize)
+                # KIRIM PARAMETER ignore_danger BERDASARKAN RUSH MODE
+                self.path = self.compute_path(maze, current_target, guardians, visualize=do_visualize, ignore_danger=self.rush_mode)
             else:
                 next_step = self.get_exploration_target(maze)
                 if next_step:

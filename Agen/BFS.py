@@ -1,5 +1,6 @@
 import random
 from collections import deque
+import time
 
 class BFSAgent:
     def __init__(self, start_x, start_y, keys, goal):
@@ -27,6 +28,13 @@ class BFSAgent:
         
         self.latest_scan = []
         self.just_replanned = False
+        self.total_compute_time = 0.0
+        self.last_compute_time = 0.0
+        
+        self.position_history = deque(maxlen=6) 
+        self.patience = 5                       
+        self.rush_mode = False
+        self.compute_counts = 0
 
     def scan_surroundings(self, maze, specific_radius=None):
         """Mengecek area sekitar untuk mencari Key atau Goal (Sama persis dengan A*)"""
@@ -82,8 +90,9 @@ class BFSAgent:
                     res.append((nx, ny))
         return res
 
-    def compute_path(self, maze, target, guardians=[], visualize=True):
+    def compute_path(self, maze, target, guardians=[], visualize=True, ignore_danger=False):
         """Menghitung path menggunakan BFS (Breadth-First Search)"""
+        start_timer = time.perf_counter()
         if visualize:
             self.latest_scan = []
             self.just_replanned = True
@@ -95,9 +104,10 @@ class BFSAgent:
             return []
         
         danger_zone = set()
-        if guardians:
+        # HANYA buat danger zone jika TIDAK dalam mode nekat (ignore_danger=False)
+        if guardians and not ignore_danger:
             for g in guardians:
-                # Radius 2 (sedikit lebih kecil dari A*)
+                # Radius 2
                 for dy in range(-2, 3):
                     for dx in range(-2, 3):
                         if abs(dx) + abs(dy) <= 2:
@@ -123,6 +133,13 @@ class BFSAgent:
                 if next_node not in came_from:
                     came_from[next_node] = current
                     q.append(next_node)
+                    
+        end_timer = time.perf_counter() # STOP
+        execution_time = (end_timer - start_timer) * 1000 # ms
+        self.last_compute_time = execution_time
+        self.total_compute_time += execution_time
+        
+        self.compute_counts += 1
         
         if goal not in came_from:
             return []
@@ -148,27 +165,42 @@ class BFSAgent:
             return random.choice(neighbors)
             
         return (self.x, self.y)
+    
+    def check_deadlock(self):
+        """Mendeteksi apakah agen bolak-balik di tempat yang sama."""
+        self.position_history.append((self.x, self.y))
+        
+        if len(self.position_history) < 6:
+            return False
+            
+        unique_pos = set(self.position_history)
+        if len(unique_pos) <= 3: 
+            return True
+        return False
 
     def step(self, maze, guardians):
         if not self.alive or self.finished:
             return
 
-        # 1. SCAN GLOBAL (Hanya Visualisasi di sini!)
-        # Scan Key Awal
         if not self.has_key and not self.memory_keys:
             self.scan_surroundings(maze, specific_radius=999)
-            # Tidak perlu return, biarkan lanjut ke logika pathfinding
             
-        # Scan Goal setelah dapat Key
         if self.has_key and self.memory_goal is None:
             self.scan_surroundings(maze, specific_radius=999)
 
-        # Scan rutin (radius pendek) - TIDAK BOLEH MEMICU ANIMASI
         found_new_info = self.scan_surroundings(maze) 
+        is_stuck = self.check_deadlock()
+        if is_stuck:
+            self.patience -= 1
+        else:
+            self.patience = 5
+            self.rush_mode = False 
+
+        if self.patience <= 0:
+            self.rush_mode = True
         
         current_target = None
         
-        # 2. TENTUKAN TARGET
         if not self.has_key:
             if (self.x, self.y) in self.true_keys:
                 self.has_key = True
@@ -177,8 +209,10 @@ class BFSAgent:
                     self.memory_keys.remove((self.x, self.y))
                 self.path = [] 
                 
-                # Visualisasi Scan Pintu (Hanya saat momen dapat kunci)
                 self.scan_surroundings(maze, specific_radius=999) 
+                
+                self.position_history.clear()
+                self.patience = 5
                 
                 if self.memory_goal:
                     current_target = self.memory_goal
@@ -195,42 +229,36 @@ class BFSAgent:
             else:
                 current_target = None
 
-        # 3. LOGIKA MENGHINDAR (PRIORITAS TERTINGGI)
-        # Gunakan if-elif-else agar logika di bawahnya tidak menimpa hasil menghindar
-        if self.is_guardian_near(guardians, radius=2):
+        should_avoid = self.is_guardian_near(guardians, radius=2)
+        
+        if self.rush_mode:
+            should_avoid = False 
+
+        if should_avoid:
             avoid_pos = self.get_avoid_direction(maze, guardians)
             if avoid_pos:
                 self.prev = (self.x, self.y)
                 self.x, self.y = avoid_pos
                 self.current_run_steps += 1
                 
-                # Silent Replan (Tanpa Visualisasi)
                 if current_target:
                     self.path = self.compute_path(maze, current_target, guardians, visualize=False)
                 else:
                     self.path = []
-                return # Langsung keluar agar tidak ditimpa logika di bawah
+                return 
 
-        # 4. PATHFINDING RUTIN (JALAN MENUJU TARGET)
-        # Hanya hitung ulang jika ada info baru ATAU path habis
-        if found_new_info or not self.path:
+        if found_new_info or not self.path or (self.rush_mode and is_stuck):
             if current_target:
-                # PERBAIKAN UTAMA: visualize=False untuk pergerakan rutin!
-                # Kita sudah scan global di awal, jadi pergerakan biasa tidak perlu animasi scan lagi.
-                # Kecuali kamu benar-benar ingin melihat scan setiap langkah, biarkan False.
                 do_visualize = False 
-                
-                # Opsional: Jika path kosong total (awal game), boleh visualize True
                 if self.current_run_steps == 0:
                     do_visualize = True
-
-                self.path = self.compute_path(maze, current_target, guardians, visualize=do_visualize)
+                
+                self.path = self.compute_path(maze, current_target, guardians, visualize=do_visualize, ignore_danger=self.rush_mode)
             else:
                 next_step = self.get_exploration_target(maze)
                 if next_step:
                     self.path = [next_step]
 
-        # 5. EKSEKUSI LANGKAH
         if self.path:
             next_pos = self.path.pop(0)
             death = False
