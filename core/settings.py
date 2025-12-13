@@ -14,6 +14,8 @@ COLOR_KEY = (235, 200, 60)
 COLOR_ASTAR_AGENT = (255, 0, 255) # Tambahkan
 COLOR_BFS_AGENT = (0, 255, 255)   # Tambahkan
 NUM_KEYS = 2
-
-
-FPS = 6
+COLOR_SCAN_ASTAR = (255, 150, 255) # Pink muda
+COLOR_SCAN_BFS = (150, 255, 255)   # Cyan muda
+ANIMATION_SPEED = 500
+COLOR_SCAN_OVERLAP = (255, 255, 255) # Putih Terang
+FPS = 10
