@@ -12,105 +12,159 @@ pygame.init()
 
 LEVEL = 1
 
+STAGE = 1        # 1: 0 guardian, 2: 1 guardian, 3: 2 guardian
+
 # START MODIFIKASI: Variabel Global untuk Tracking Loop dan Statistik
 LOOP_COUNT = 1
 # all_loops_stats akan menyimpan daftar statistik untuk setiap loop
 all_loops_stats = []
 
-def init_new_loop_stats(loop_num):
-    """Menginisialisasi struktur data untuk loop baru."""
+def init_new_loop_stats(loop_count):
     return {
-        'loop_number': loop_num,
-        # Mengganti 'finish_steps' dengan 'level_results' untuk menyimpan status (FINISHED, DIED, QUIT) dan langkah
-        'AStar': {'level_results': {}, 'deaths': 0, 'total_steps': 0, 'total_nodes': 0, 'total_time': 0.0, 'total_computations': 0}, 
-        'BFS': {'level_results': {}, 'deaths': 0, 'total_steps': 0, 'total_nodes': 0, 'total_time': 0.0, 'total_computations': 0}
+        "loop": loop_count,
+        "stages": {
+            1: init_stage_stats(),
+            2: init_stage_stats(),
+            3: init_stage_stats()
+        }
+    }
+
+def init_stage_stats():
+    return {
+        "AStar": init_single_agent_stats(),
+        "BFS": init_single_agent_stats()
+    }
+
+def init_single_agent_stats():
+    return {
+        "total_steps": 0,
+        "total_nodes": 0,
+        "total_time": 0,
+        "total_computations": 0,
+        "deaths": 0,
+        "level_results": {}
     }
 
 def print_loop_summary(loop_data):
-    """Mencetak ringkasan untuk satu loop (L1-L3) yang telah selesai."""
-    loop_num = loop_data['loop_number']
-    stats = loop_data
-    
-    astar_results = stats['AStar']['level_results']
-    bfs_results = stats['BFS']['level_results']
-    
-    astar_wins = sum(1 for res in astar_results.values() if res['status'] == 'FINISHED')
-    bfs_wins = sum(1 for res in bfs_results.values() if res['status'] == 'FINISHED')
-    
-    astar_win_steps = [res['steps'] for res in astar_results.values() if res['status'] == 'FINISHED']
-    bfs_win_steps = [res['steps'] for res in bfs_results.values() if res['status'] == 'FINISHED']
-    
-    avg_astar_steps = sum(astar_win_steps) / len(astar_win_steps) if astar_win_steps else 0
-    avg_bfs_steps = sum(bfs_win_steps) / len(bfs_win_steps) if bfs_win_steps else 0
-    
-    astar_time = stats['AStar']['total_time']
-    bfs_time = stats['BFS']['total_time']
+    """Mencetak ringkasan satu loop eksperimen (Stage 1–3, Level 1–3)."""
 
-    print("\n" + "═"*70)
-    print(f"             RANGKUMAN LOOP KE-{loop_num} (LEVEL 1-3)")
-    print("═"*70)
-    
-    print(f"{'Metric':<25} | {'A* Agent':<15} | {'BFS Agent':<15}")
-    print("-" * 65)
-    print(f"{'Level Selesai (Win)':<25} | {astar_wins:<15} | {bfs_wins:<15}")
-    print(f"{'Avg Langkah (Win Only)':<25} | {avg_astar_steps:<15.1f} | {avg_bfs_steps:<15.1f}")
-    print(f"{'Total Komputasi (Node)':<25} | {stats['AStar']['total_nodes']:<15} | {stats['BFS']['total_nodes']:<15}")
-    print(f"{'Total Waktu (ms)':<25} | {astar_time:<15.2f} | {bfs_time:<15.2f}")
-    print("-" * 65)
+    loop_num = loop_data['loop']
+    stages = loop_data['stages']
 
-    print("\n--- Hasil dan Langkah Per Level ---")
-    status_map = {'FINISHED': 'MENANG', 'DIED': 'MATI', 'QUIT': 'TIDAK SELESAI (Keluar)'}
-    
-    print(f"{'A* Agent':<15}: Total {astar_wins}/{3} level diselesaikan.")
-    for level in range(1, 4):
-        res_a = astar_results.get(level, {'status': '-', 'steps': 0})
-        res_b = bfs_results.get(level, {'status': '-', 'steps': 0})
-        
-        stat_a = status_map.get(res_a['status'], '-')
-        stat_b = status_map.get(res_b['status'], '-')
-        
-        print(f"Level {level}: A* [{stat_a}, {res_a['steps']} step] vs BFS [{stat_b}, {res_b['steps']} step]")
-    print("═"*70)
+    print("\n" + "═"*90)
+    print(f"                  RANGKUMAN LOOP KE-{loop_num}")
+    print("═"*90)
+
+    status_map = {
+        'FINISHED': 'MENANG',
+        'DIED': 'MATI',
+        'QUIT': 'TIDAK SELESAI',
+        '-': '-'
+    }
+
+    # ===============================
+    # Ringkasan per STAGE
+    # ===============================
+    for stage in range(1, 4):
+        stage_data = stages[stage]
+        astar_stats = stage_data['AStar']
+        bfs_stats = stage_data['BFS']
+
+        astar_results = astar_stats['level_results']
+        bfs_results = bfs_stats['level_results']
+
+        astar_wins = sum(1 for r in astar_results.values() if r['status'] == 'FINISHED')
+        bfs_wins = sum(1 for r in bfs_results.values() if r['status'] == 'FINISHED')
+
+        astar_win_steps = [r['steps'] for r in astar_results.values() if r['status'] == 'FINISHED']
+        bfs_win_steps = [r['steps'] for r in bfs_results.values() if r['status'] == 'FINISHED']
+
+        avg_astar_steps = sum(astar_win_steps) / len(astar_win_steps) if astar_win_steps else 0
+        avg_bfs_steps = sum(bfs_win_steps) / len(bfs_win_steps) if bfs_win_steps else 0
+
+        print(f"\n▶ STAGE {stage} (Guardian = {stage - 1})")
+        print("-"*90)
+        print(f"{'Metric':<30} | {'A*':<15} | {'BFS':<15}")
+        print("-"*90)
+        print(f"{'Level Diselesaikan':<30} | {astar_wins:<15} | {bfs_wins:<15}")
+        print(f"{'Rata-rata Langkah (Win)':<30} | {avg_astar_steps:<15.1f} | {avg_bfs_steps:<15.1f}")
+        print(f"{'Total Node Diekspansi':<30} | {astar_stats['total_nodes']:<15} | {bfs_stats['total_nodes']:<15}")
+        print(f"{'Total Waktu Komputasi (ms)':<30} | {astar_stats['total_time']:<15.2f} | {bfs_stats['total_time']:<15.2f}")
+
+        print("\nDetail per Level:")
+        for level in range(1, 4):
+            res_a = astar_results.get(level, {'status': '-', 'steps': 0})
+            res_b = bfs_results.get(level, {'status': '-', 'steps': 0})
+
+            stat_a = status_map.get(res_a['status'], '-')
+            stat_b = status_map.get(res_b['status'], '-')
+
+            print(
+                f"  Level {level}: "
+                f"A* [{stat_a}, {res_a['steps']} step] | "
+                f"BFS [{stat_b}, {res_b['steps']} step]"
+            )
+
+    print("═"*90)
     
 def print_final_summary(all_data):
+    """Ringkasan akhir seluruh eksperimen (Loop × Stage × Level)."""
+
     total_astar_wins = 0
     total_bfs_wins = 0
     total_astar_win_steps = 0
     total_bfs_win_steps = 0
-    
-    total_astar_nodes = sum(d['AStar']['total_nodes'] for d in all_data)
-    total_bfs_nodes = sum(d['BFS']['total_nodes'] for d in all_data)
-    
-    total_astar_deaths = sum(d['AStar']['deaths'] for d in all_data)
-    total_bfs_deaths = sum(d['BFS']['deaths'] for d in all_data)
 
-    total_astar_all_steps = sum(d['AStar']['total_steps'] for d in all_data) # Langkah total (termasuk saat mati)
-    total_bfs_all_steps = sum(d['BFS']['total_steps'] for d in all_data)
+    total_astar_nodes = 0
+    total_bfs_nodes = 0
+    total_astar_deaths = 0
+    total_bfs_deaths = 0
+    total_astar_all_steps = 0
+    total_bfs_all_steps = 0
+    total_astar_time = 0
+    total_bfs_time = 0
 
-    total_attempts = 0 # Total level yang dimainkan
+    total_levels_played = 0
 
-    # Akumulasi Data Kemenangan Saja
-    for d in all_data:
-        # A*
-        for res in d['AStar']['level_results'].values():
-            total_attempts += 1 # Hitung percobaan (asumsi level sama utk kedua agen)
-            if res['status'] == 'FINISHED':
-                total_astar_wins += 1
-                total_astar_win_steps += res['steps']
-        # BFS
-        for res in d['BFS']['level_results'].values():
-            if res['status'] == 'FINISHED':
-                total_bfs_wins += 1
-                total_bfs_win_steps += res['steps']
-    
+    # ===============================
+    # AKUMULASI SEMUA DATA
+    # ===============================
+    for loop_data in all_data:
+        for stage in range(1, 4):
+            stage_data = loop_data['stages'][stage]
 
-    total_levels_played = len(all_data) * 3
+            astar = stage_data['AStar']
+            bfs = stage_data['BFS']
 
+            total_astar_nodes += astar['total_nodes']
+            total_bfs_nodes += bfs['total_nodes']
+            total_astar_deaths += astar['deaths']
+            total_bfs_deaths += bfs['deaths']
+            total_astar_all_steps += astar['total_steps']
+            total_bfs_all_steps += bfs['total_steps']
+            total_astar_time += astar['total_time']
+            total_bfs_time += bfs['total_time']
+
+            # Hitung per level
+            for level in range(1, 4):
+                total_levels_played += 1
+
+                res_a = astar['level_results'].get(level)
+                res_b = bfs['level_results'].get(level)
+
+                if res_a and res_a['status'] == 'FINISHED':
+                    total_astar_wins += 1
+                    total_astar_win_steps += res_a['steps']
+
+                if res_b and res_b['status'] == 'FINISHED':
+                    total_bfs_wins += 1
+                    total_bfs_win_steps += res_b['steps']
+
+    # ===============================
+    # PERHITUNGAN AKHIR
+    # ===============================
     avg_astar_steps_win = total_astar_win_steps / total_astar_wins if total_astar_wins > 0 else 0
     avg_bfs_steps_win = total_bfs_win_steps / total_bfs_wins if total_bfs_wins > 0 else 0
-    
-    total_astar_time = sum(d['AStar']['total_time'] for d in all_data)
-    total_bfs_time = sum(d['BFS']['total_time'] for d in all_data)
 
     avg_time_per_step_astar = total_astar_time / total_astar_all_steps if total_astar_all_steps > 0 else 0
     avg_time_per_step_bfs = total_bfs_time / total_bfs_all_steps if total_bfs_all_steps > 0 else 0
@@ -118,43 +172,36 @@ def print_final_summary(all_data):
     win_rate_astar = (total_astar_wins / total_levels_played) * 100 if total_levels_played > 0 else 0
     win_rate_bfs = (total_bfs_wins / total_levels_played) * 100 if total_levels_played > 0 else 0
 
-    print("\n" + "█"*80)
-    print(f"             KESIMPULAN AKHIR (DATA SCIENTIFIC - {total_levels_played} LEVEL DIMAINKAN)")
-    print("█"*80)
-    
+    # ===============================
+    # OUTPUT
+    # ===============================
+    print("\n" + "█"*90)
+    print(f"     KESIMPULAN AKHIR EKSPERIMEN ({total_levels_played} LEVEL TOTAL)")
+    print("█"*90)
+
     print(f"{'METRIK PERFORMA':<35} | {'A* (Smart)':<18} | {'BFS (Basic)':<18}")
-    print("=" * 80)
-    
-    # Bagian Keberhasilan
-    print(f"{'Total Menang (Win Rate)':<35} | {f'{total_astar_wins} ({win_rate_astar:.1f}%)':<18} | {f'{total_bfs_wins} ({win_rate_bfs:.1f}%)':<18}")
+    print("=" * 90)
+
+    print(f"{'Total Menang (Win Rate)':<35} | "
+          f"{f'{total_astar_wins} ({win_rate_astar:.1f}%)':<18} | "
+          f"{f'{total_bfs_wins} ({win_rate_bfs:.1f}%)':<18}")
+
     print(f"{'Total Kematian':<35} | {total_astar_deaths:<18} | {total_bfs_deaths:<18}")
-    print("-" * 80)
-    
-    # Bagian Efisiensi Langkah (Hanya saat Menang)
-    print(f"{'Rata-rata Langkah (Saat Menang)':<35} | {avg_astar_steps_win:<18.1f} | {avg_bfs_steps_win:<18.1f}")
-    print("-" * 80)
-    
-    # Bagian Komputasi (Space Complexity)
+    print("-" * 90)
+
+    print(f"{'Rata-rata Langkah (Saat Menang)':<35} | "
+          f"{avg_astar_steps_win:<18.1f} | {avg_bfs_steps_win:<18.1f}")
+
+    print("-" * 90)
+
     print(f"{'Total Node Diekspansi (Space)':<35} | {total_astar_nodes:<18} | {total_bfs_nodes:<18}")
-    
-    # Bagian Waktu (Time Complexity) - YANG ANDA CARI
     print(f"{'Total Waktu Berpikir (ms)':<35} | {total_astar_time:<18.2f} | {total_bfs_time:<18.2f}")
-    print(f"{'Avg Waktu per Langkah (ms/step)':<35} | {avg_time_per_step_astar:<18.4f} | {avg_time_per_step_bfs:<18.4f}")
-    
-    print("=" * 80)
-    
-    # --- ANALISIS OTOMATIS SEDERHANA ---
-    # print("\nANALISIS SINGKAT:")
-    # if win_rate_astar > win_rate_bfs:
-    #     print(f">> A* LEBIH AMAN: Win rate lebih tinggi ({win_rate_astar:.1f}% vs {win_rate_bfs:.1f}%) berkat fitur Danger Zone.")
-    # elif win_rate_bfs > win_rate_astar:
-    #     print(f">> BFS LEBIH TANGGUH: Win rate lebih tinggi, mungkin A* terlalu sensitif (paranoid) menghindar.")
-        
-    # if avg_time_per_step_astar > avg_time_per_step_bfs:
-    #     diff = avg_time_per_step_astar / avg_time_per_step_bfs if avg_time_per_step_bfs > 0 else 0
-    #     print(f">> KOMPUTASI: A* berpikir {diff:.1f}x lebih lambat per langkah dibanding BFS (Wajar karena Heuristik).")
-    
-    print("█"*80)
+
+    print(f"{'Avg Waktu per Langkah (ms/step)':<35} | "
+          f"{avg_time_per_step_astar:<18.4f} | {avg_time_per_step_bfs:<18.4f}")
+
+    print("=" * 90)
+    print("█"*90)
 
 def draw_agent_path(screen, agent, tile_size, color):
     """Menggambar garis rencana rute agen"""
@@ -294,7 +341,7 @@ def spawn_guardians(grid, count, forbidden_positions):
     return guardians
 
 def main():
-    global LEVEL, all_loops_stats, LOOP_COUNT 
+    global STAGE,LEVEL, all_loops_stats, LOOP_COUNT 
     clock = pygame.time.Clock()
 
     all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
@@ -310,10 +357,16 @@ def main():
 
     astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
     bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
-    num_guardians_map = {1: 0, 2: 1, 3: 2}
-    count = num_guardians_map.get(LEVEL, 2)
+    
     forbidden = [start, goal] + keys
-    guardians = spawn_guardians(grid, count, [start, goal] + keys)
+    stage_guardians = {1: 0, 2: 1, 3: 2}
+    guardian_count = stage_guardians[STAGE]
+
+    guardians = spawn_guardians(
+        grid,
+        guardian_count,
+        [start, goal] + keys
+    )
     
     running = True
 
@@ -323,27 +376,55 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_q)):
                 running = False
-                
-                current_loop_data['AStar']['total_steps'] += astar.current_run_steps
-                current_loop_data['AStar']['total_nodes'] += astar.nodes_expanded 
-                current_loop_data['AStar']['total_time'] += astar.total_compute_time 
-                current_loop_data['AStar']['total_computations'] += astar.compute_counts 
-                if LEVEL not in current_loop_data['AStar']['level_results']:
+                                
+                current_stage_data = current_loop_data['stages'][STAGE]
+
+                current_stage_data['AStar']['total_steps'] += astar.current_run_steps
+                current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
+                current_stage_data['AStar']['total_time'] += astar.total_compute_time
+                current_stage_data['AStar']['total_computations'] += astar.compute_counts
+
+                if LEVEL not in current_loop_data['stages'][STAGE]['AStar']['level_results']:
                     if astar.finished:
-                        current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['AStar']['level_results'][LEVEL] = {
+                            "status": "FINISHED",
+                            "steps": game_steps
+                        }
+
                     elif astar.alive:
-                        current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': game_steps}
-                        
-                current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
-                current_loop_data['BFS']['total_nodes'] += bfs.nodes_expanded 
-                current_loop_data['BFS']['total_time'] += bfs.total_compute_time 
-                current_loop_data['BFS']['total_computations'] += bfs.compute_counts 
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['AStar']['level_results'][LEVEL] = {
+                            "status": "QUIT",
+                            "steps": game_steps
+                        }
+
+                                        
+                current_stage_data = current_loop_data['stages'][STAGE]
+
+                current_stage_data['BFS']['total_steps'] += astar.current_run_steps
+                current_stage_data['BFS']['total_nodes'] += astar.nodes_expanded
+                current_stage_data['BFS']['total_time'] += astar.total_compute_time
+                current_stage_data['BFS']['total_computations'] += astar.compute_counts
                 
-                if LEVEL not in current_loop_data['BFS']['level_results']:
+                if LEVEL not in current_loop_data['stages'][STAGE]['BFS']['level_results']:
                     if bfs.finished:
-                        current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'FINISHED', 'steps': game_steps}
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['BFS']['level_results'][LEVEL] = {
+                            "status": "FINISHED",
+                            "steps": game_steps
+                        }
+
                     elif bfs.alive:
-                        current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': game_steps}
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['BFS']['level_results'][LEVEL] = {
+                            "status": "QUIT",
+                            "steps": game_steps
+                        }
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
@@ -353,30 +434,55 @@ def main():
                     start, goal, keys = find_positions(grid)
                     astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
                     bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
-                    guardians = spawn_guardians(grid, count, [start, goal] + keys)
+                    guardians = spawn_guardians(
+                        grid,
+                        guardian_count,
+                        [start, goal] + keys
+                    )
                             
                     grid = map_generator.generate_maze(LEVEL)
                     start, goal, keys = find_positions(grid)
                     astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
                     bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
-                    guardian_count = {1: 0, 2: 1, 3: 2}.get(LEVEL, 2)
-                    guardians = spawn_guardians(grid, guardian_count, [start, goal] + keys) 
+                    stage_guardians = {1: 0, 2: 1, 3: 2}
+                    guardian_count = stage_guardians[STAGE]
+                    guardians = spawn_guardians(
+                        grid,
+                        guardian_count,
+                        [start, goal] + keys
+                    ) 
 
                 elif event.key == pygame.K_n:
                     if astar.alive and not astar.finished:
-                        current_loop_data['AStar']['total_steps'] += astar.current_run_steps
-                        current_loop_data['AStar']['total_nodes'] += astar.nodes_expanded
-                        current_loop_data['AStar']['total_time'] += astar.total_compute_time
-                        current_loop_data['AStar']['total_computations'] += astar.compute_counts
+                        current_stage_data = current_loop_data['stages'][STAGE]
 
-                        current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': astar.current_run_steps}
+                        current_stage_data['AStar']['total_steps'] += astar.current_run_steps
+                        current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
+                        current_stage_data['AStar']['total_time'] += astar.total_compute_time
+                        current_stage_data['AStar']['total_computations'] += astar.compute_counts
+
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['AStar']['level_results'][LEVEL] = {
+                            "status": "QUIT",
+                            "steps": game_steps
+                        }
+
                     
                     if bfs.alive and not bfs.finished:
-                        current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
-                        current_loop_data['BFS']['total_nodes'] += bfs.nodes_expanded
-                        current_loop_data['BFS']['total_time'] += bfs.total_compute_time
-                        current_loop_data['BFS']['total_computations'] += bfs.compute_counts
-                        current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'QUIT', 'steps': bfs.current_run_steps}
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['BFS']['total_steps'] += astar.current_run_steps
+                        current_stage_data['BFS']['total_nodes'] += astar.nodes_expanded
+                        current_stage_data['BFS']['total_time'] += astar.total_compute_time
+                        current_stage_data['BFS']['total_computations'] += astar.compute_counts
+
+                        current_stage_data = current_loop_data['stages'][STAGE]
+
+                        current_stage_data['BFS']['level_results'][LEVEL] = {
+                            "status": "QUIT",
+                            "steps": game_steps
+                        }
                     
                     # Lanjut ke level berikutnya
                     LEVEL = LEVEL + 1 if LEVEL < 3 else 1
@@ -387,8 +493,13 @@ def main():
                     start, goal, keys = find_positions(grid)
                     astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
                     bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
-                    guardian_count = {1: 0, 2: 1, 3: 2}.get(LEVEL, 2)
-                    guardians = spawn_guardians(grid, guardian_count, [start, goal] + keys)
+                    stage_guardians = {1: 0, 2: 1, 3: 2}
+                    guardian_count = stage_guardians[STAGE]
+                    guardians = spawn_guardians(
+                        grid,
+                        guardian_count,
+                        [start, goal] + keys
+                    )
 
         game_steps += 1 
         astar.step(grid, guardians)
@@ -417,19 +528,35 @@ def main():
             if astar.alive and (astar.x, astar.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] A* Mati")
                 astar.alive = False
-                current_loop_data['AStar']['deaths'] += 1
+                current_stage_data = current_loop_data['stages'][STAGE]
+                current_stage_data['AStar']['deaths'] += 1
+
                 # Catat status DIED dan langkah/ticks
-                if not astar.finished and LEVEL not in current_loop_data['AStar']['level_results']:
-                    current_loop_data['AStar']['level_results'][LEVEL] = {'status': 'DIED', 'steps': game_steps}
-                    current_loop_data['AStar']['total_nodes'] += astar.nodes_expanded
+                if not astar.finished and LEVEL not in current_loop_data['stages'][STAGE]['AStar']['level_results']:
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['AStar']['level_results'][LEVEL] = {
+                        "status": "DIED",
+                        "steps": game_steps
+                    }
+
+                    current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
 
             if bfs.alive and (bfs.x, bfs.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] BFS Mati")
                 bfs.alive = False
-                current_loop_data['BFS']['deaths'] += 1
-                if not bfs.finished and LEVEL not in current_loop_data['BFS']['level_results']:
-                    current_loop_data['BFS']['level_results'][LEVEL] = {'status': 'DIED', 'steps': game_steps}
-                    current_loop_data['BFS']['total_nodes'] += bfs.nodes_expanded                
+                current_stage_data = current_loop_data['stages'][STAGE]
+                current_stage_data['BFS']['deaths'] += 1
+
+                if not bfs.finished and LEVEL not in current_loop_data['stages'][STAGE]['BFS']['level_results']:
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['BFS']['level_results'][LEVEL] = {
+                        "status": "DIED",
+                        "steps": game_steps
+                    }
+
+                    current_stage_data['BFS']['total_nodes'] += bfs.nodes_expanded                
 
         astar_settled = astar.finished or not astar.alive
         bfs_settled = bfs.finished or not bfs.alive
@@ -438,27 +565,46 @@ def main():
         
         if astar_settled and bfs_settled:
             re_initialize = True
-            if LEVEL not in current_loop_data['AStar']['level_results'] or current_loop_data['AStar']['level_results'][LEVEL]['status'] == 'QUIT':
+            current_stage_data = current_loop_data['stages'][STAGE]
+            astar_stats = current_stage_data['AStar']
+
+            if LEVEL not in astar_stats['level_results'] or astar_stats['level_results'][LEVEL]['status'] == 'QUIT':
+
                 if astar.finished:
-                    current_loop_data['AStar']['total_steps'] += astar.current_run_steps
-                    current_loop_data['AStar']['total_nodes'] += astar.nodes_expanded
-                    current_loop_data['AStar']['total_time'] += astar.total_compute_time
-                    current_loop_data['AStar']['total_computations'] += astar.compute_counts
-                    current_loop_data['AStar']['level_results'][LEVEL] = {
-                        'status': 'FINISHED', 
-                        'steps': game_steps 
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['AStar']['total_steps'] += astar.current_run_steps
+                    current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
+                    current_stage_data['AStar']['total_time'] += astar.total_compute_time
+                    current_stage_data['AStar']['total_computations'] += astar.compute_counts
+
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['AStar']['level_results'][LEVEL] = {
+                        "status": "FINISHED",
+                        "steps": game_steps
                     }
-            
-            if LEVEL not in current_loop_data['BFS']['level_results'] or current_loop_data['BFS']['level_results'][LEVEL]['status'] == 'QUIT':
+
+            current_stage_data = current_loop_data['stages'][STAGE]
+            bfs_stats = current_stage_data['BFS']
+
+            if LEVEL not in bfs_stats['level_results'] or bfs_stats['level_results'][LEVEL]['status'] == 'QUIT':
+
                 if bfs.finished:
-                    current_loop_data['BFS']['total_steps'] += bfs.current_run_steps
-                    current_loop_data['BFS']['total_nodes'] += bfs.nodes_expanded
-                    current_loop_data['BFS']['total_time'] += bfs.total_compute_time
-                    current_loop_data['BFS']['total_computations'] += bfs.compute_counts
-                    current_loop_data['BFS']['level_results'][LEVEL] = {
-                        'status': 'FINISHED', 
-                        'steps': game_steps
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['BFS']['total_steps'] += astar.current_run_steps
+                    current_stage_data['BFS']['total_nodes'] += astar.nodes_expanded
+                    current_stage_data['BFS']['total_time'] += astar.total_compute_time
+                    current_stage_data['BFS']['total_computations'] += astar.compute_counts
+
+                    current_stage_data = current_loop_data['stages'][STAGE]
+
+                    current_stage_data['BFS']['level_results'][LEVEL] = {
+                        "status": "FINISHED",
+                        "steps": game_steps
                     }
+
                 
             if astar.finished and bfs.finished:
                 print(f"Kedua Agen menang di level {LEVEL}")
@@ -470,26 +616,39 @@ def main():
                 print(f"Guardian menang di level {LEVEL}")
 
         if re_initialize:
-            is_loop_complete = LEVEL == 3 
-            
+            is_last_level = LEVEL == 3
+            is_last_stage = STAGE == 3
+
+            # Naik level
             LEVEL = LEVEL + 1 if LEVEL < 3 else 1
-            
-            if is_loop_complete:
-                print_loop_summary(current_loop_data) 
-                LOOP_COUNT += 1
-                all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
-                current_loop_data = all_loops_stats[LOOP_COUNT - 1]
-            
+
+            # Jika level habis, naik stage
+            if is_last_level:
+                STAGE = STAGE + 1 if STAGE < 3 else 1
+
+                # Jika stage juga habis, loop selesai
+                if is_last_stage:
+                    print_loop_summary(current_loop_data)
+                    LOOP_COUNT += 1
+                    all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
+                    current_loop_data = all_loops_stats[LOOP_COUNT - 1]
+
+            # Reset environment
             game_steps = 0
             grid = map_generator.generate_maze(LEVEL)
             size = map_generator.get_size_for_level(LEVEL)
             tile_size = settings.WINDOW_SIZE // size
+
             start, goal, keys = find_positions(grid)
-            astar = AStarAgent(start[0], start[1], copy.copy(keys), goal) 
+
+            astar = AStarAgent(start[0], start[1], copy.copy(keys), goal)
             bfs = BFSAgent(start[0], start[1], copy.copy(keys), goal)
-            guardian_count = {1: 0, 2: 1, 3: 2}.get(LEVEL, 2)
+
+            guardian_count = {1: 0, 2: 1, 3: 2}[STAGE]
             guardians = spawn_guardians(grid, guardian_count, [start, goal] + keys)
+
             continue
+
 
 
         size = map_generator.get_size_for_level(LEVEL)
