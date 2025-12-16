@@ -214,9 +214,11 @@ def draw_agent_path(screen, agent, tile_size, color):
     # Masukkan semua titik di path rencana
     for (x, y) in agent.path:
         points.append((x * tile_size + tile_size//2, y * tile_size + tile_size//2))
-        
+    
+    dark_color = (color[0], color[1] // 2, color[2] //  1.5)
+    
     if len(points) > 1:
-        pygame.draw.lines(screen, color, False, points, 3) # Ketebalan 3
+        pygame.draw.lines(screen, dark_color, False, points, 3) # Ketebalan 3
         
 def draw_grid(screen, grid, tile_size):
     rows = len(grid)
@@ -657,12 +659,13 @@ def main():
         draw_grid(screen, grid, tile_size)
         draw_agent_path(screen, astar, tile_size, (180, 0, 180))
         draw_agent_path(screen, bfs, tile_size, (0, 180, 180))
-
-        pygame.draw.circle(
-            screen, settings.COLOR_START,
-            (start[0] * tile_size + tile_size//2, start[1] * tile_size + tile_size//2),
-            max(4, tile_size // 3)
+        spawn_rect = pygame.Rect(
+            start[0] * tile_size + tile_size//4, 
+            start[1] * tile_size + tile_size//4, 
+            tile_size//2, 
+            tile_size//2
         )
+        pygame.draw.rect(screen, (100, 100, 100), spawn_rect)
 
         for g in guardians:
             pygame.draw.circle(
