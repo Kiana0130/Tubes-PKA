@@ -1,6 +1,6 @@
 import pygame
 import sys
-import pandas as pd  # Added
+import pandas as pd
 from Agen.guardian import Guardian
 from core import map_generator
 from core import settings
@@ -10,8 +10,18 @@ import random
 import copy 
 
 pygame.init()
+
+# --- SETTINGS ---
+settings.COLOR_ASTAR_AGENT = (255, 0, 255)
+settings.COLOR_BFS_AGENT = (0, 255, 255)
+settings.COLOR_SCAN_ASTAR = (224, 81, 224)
+settings.COLOR_SCAN_BFS = (64, 156, 184)
+settings.COLOR_SCAN_OVERLAP = (255, 255, 255) 
 SCAN_SPEED_NODES_PER_FRAME = 30 
 
+# --- CONFIGURATION ---
+MAX_LOOPS = 5        
+RETRY_ON_DEATH = False   # <--- USER REQUEST: False (Move to next level on death)
 LEVEL = 1
 STAGE = 1        
 
@@ -46,9 +56,7 @@ def init_single_agent_stats():
     }
 
 def export_to_excel(all_data):
-    """Parses all_loops_stats and saves to Excel with two sheets."""
     print("Exporting data to Excel...")
-    
     summary_data = []
     level_data = []
 
@@ -58,23 +66,18 @@ def export_to_excel(all_data):
 
         for stage_num, stage_stats in stages.items():
             guardian_count = stage_num - 1
-            
             for agent_name in ['AStar', 'BFS']:
                 stats = stage_stats[agent_name]
-
-                # 1. Prepare Summary Data (Per Stage)
                 summary_data.append({
                     "Loop": loop_num,
                     "Stage": stage_num,
                     "Guardian Count": guardian_count,
                     "Agent": agent_name,
-                    "Total Steps": stats['total_steps'],
+                    "Total Steps (All Attempts)": stats['total_steps'], # Renamed header
                     "Total Nodes Expanded": stats['total_nodes'],
                     "Total Time (ms)": stats['total_time'],
                     "Deaths": stats['deaths']
                 })
-
-                # 2. Prepare Detailed Data (Per Level)
                 for level_num, result in stats['level_results'].items():
                     level_data.append({
                         "Loop": loop_num,
@@ -115,20 +118,24 @@ def print_loop_summary(loop_data):
 
         astar_wins = sum(1 for r in astar_results.values() if r['status'] == 'FINISHED')
         bfs_wins = sum(1 for r in bfs_results.values() if r['status'] == 'FINISHED')
-        astar_win_steps = [r['steps'] for r in astar_results.values() if r['status'] == 'FINISHED']
-        bfs_win_steps = [r['steps'] for r in bfs_results.values() if r['status'] == 'FINISHED']
-        avg_astar_steps = sum(astar_win_steps) / len(astar_win_steps) if astar_win_steps else 0
-        avg_bfs_steps = sum(bfs_win_steps) / len(bfs_win_steps) if bfs_win_steps else 0
+        
+        # Calculate Average Steps (using total steps / total levels played to show effort)
+        levels_played_astar = len(astar_results)
+        levels_played_bfs = len(bfs_results)
+        
+        avg_astar = astar_stats['total_steps'] / levels_played_astar if levels_played_astar > 0 else 0
+        avg_bfs = bfs_stats['total_steps'] / levels_played_bfs if levels_played_bfs > 0 else 0
 
         print(f"\n▶ STAGE {stage} (Guardian = {stage - 1})")
         print("-"*90)
         print(f"{'Metric':<30} | {'A*':<15} | {'BFS':<15}")
         print("-"*90)
         print(f"{'Level Diselesaikan':<30} | {astar_wins:<15} | {bfs_wins:<15}")
-        print(f"{'Rata-rata Langkah (Win)':<30} | {avg_astar_steps:<15.1f} | {avg_bfs_steps:<15.1f}")
+        print(f"{'Rata-rata Langkah (All)':<30} | {avg_astar:<15.1f} | {avg_bfs:<15.1f}")
         print(f"{'Total Node Diekspansi':<30} | {astar_stats['total_nodes']:<15} | {bfs_stats['total_nodes']:<15}")
-        print(f"{'Total Waktu Komputasi (ms)':<30} | {astar_stats['total_time']:<15.2f} | {bfs_stats['total_time']:<15.2f}")
-
+        print(f"{'Total Kematian':<30} | {astar_stats['deaths']:<15} | {bfs_stats['deaths']:<15}")
+        print(f"{'Total Waktu (ms)':<30} | {astar_stats['total_time']:<15.2f} | {bfs_stats['total_time']:<15.2f}")
+        
         print("\nDetail per Level:")
         for level in range(1, 4):
             res_a = astar_results.get(level, {'status': '-', 'steps': 0})
@@ -141,8 +148,6 @@ def print_loop_summary(loop_data):
 def print_final_summary(all_data):
     total_astar_wins = 0
     total_bfs_wins = 0
-    total_astar_win_steps = 0
-    total_bfs_win_steps = 0
     total_astar_nodes = 0
     total_bfs_nodes = 0
     total_astar_deaths = 0
@@ -172,19 +177,13 @@ def print_final_summary(all_data):
                 total_levels_played += 1
                 res_a = astar['level_results'].get(level)
                 res_b = bfs['level_results'].get(level)
-                if res_a and res_a['status'] == 'FINISHED':
-                    total_astar_wins += 1
-                    total_astar_win_steps += res_a['steps']
-                if res_b and res_b['status'] == 'FINISHED':
-                    total_bfs_wins += 1
-                    total_bfs_win_steps += res_b['steps']
+                if res_a and res_a['status'] == 'FINISHED': total_astar_wins += 1
+                if res_b and res_b['status'] == 'FINISHED': total_bfs_wins += 1
 
-    avg_astar_steps_win = total_astar_win_steps / total_astar_wins if total_astar_wins > 0 else 0
-    avg_bfs_steps_win = total_bfs_win_steps / total_bfs_wins if total_bfs_wins > 0 else 0
-    avg_time_per_step_astar = total_astar_time / total_astar_all_steps if total_astar_all_steps > 0 else 0
-    avg_time_per_step_bfs = total_bfs_time / total_bfs_all_steps if total_bfs_all_steps > 0 else 0
     win_rate_astar = (total_astar_wins / total_levels_played) * 100 if total_levels_played > 0 else 0
     win_rate_bfs = (total_bfs_wins / total_levels_played) * 100 if total_levels_played > 0 else 0
+    avg_step_astar = total_astar_all_steps / total_levels_played if total_levels_played > 0 else 0
+    avg_step_bfs = total_bfs_all_steps / total_levels_played if total_levels_played > 0 else 0
 
     print("\n" + "█"*90)
     print(f"     KESIMPULAN AKHIR EKSPERIMEN ({total_levels_played} LEVEL TOTAL)")
@@ -194,11 +193,10 @@ def print_final_summary(all_data):
     print(f"{'Total Menang (Win Rate)':<35} | {f'{total_astar_wins} ({win_rate_astar:.1f}%)':<18} | {f'{total_bfs_wins} ({win_rate_bfs:.1f}%)':<18}")
     print(f"{'Total Kematian':<35} | {total_astar_deaths:<18} | {total_bfs_deaths:<18}")
     print("-" * 90)
-    print(f"{'Rata-rata Langkah (Saat Menang)':<35} | {avg_astar_steps_win:<18.1f} | {avg_bfs_steps_win:<18.1f}")
+    print(f"{'Rata-rata Langkah (All Runs)':<35} | {avg_step_astar:<18.1f} | {avg_step_bfs:<18.1f}")
     print("-" * 90)
     print(f"{'Total Node Diekspansi (Space)':<35} | {total_astar_nodes:<18} | {total_bfs_nodes:<18}")
     print(f"{'Total Waktu Berpikir (ms)':<35} | {total_astar_time:<18.2f} | {total_bfs_time:<18.2f}")
-    print(f"{'Avg Waktu per Langkah (ms/step)':<35} | {avg_time_per_step_astar:<18.4f} | {avg_time_per_step_bfs:<18.4f}")
     print("=" * 90)
     print("█"*90)
 
@@ -310,7 +308,7 @@ def main():
     running = True
     game_steps = 0
 
-    while True:
+    while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and (event.key == pygame.K_ESCAPE or event.key == pygame.K_q)):
                 running = False
@@ -400,71 +398,96 @@ def main():
             else: target = random.choice([(astar.x, astar.y), (bfs.x, bfs.y)])
             g.move_towards_player(target[0], target[1])
 
+        # --- DEATH LOGIC (UPDATED: Record Stats Here) ---
         for g in guardians:
             if astar.alive and (astar.x, astar.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] A* Mati")
                 astar.alive = False
                 current_stage_data = current_loop_data['stages'][STAGE]
                 current_stage_data['AStar']['deaths'] += 1
-                if not astar.finished and LEVEL not in current_loop_data['stages'][STAGE]['AStar']['level_results']:
-                    current_stage_data['AStar']['level_results'][LEVEL] = {"status": "DIED", "steps": game_steps}
-                    current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
+                
+                # --- NEW: Add stats immediately on death ---
+                # We add 'game_steps' because that's how long they survived
+                current_stage_data['AStar']['total_steps'] += game_steps 
+                current_stage_data['AStar']['total_time'] += astar.total_compute_time
+                current_stage_data['AStar']['total_nodes'] += astar.nodes_expanded
+                
+                if not astar.finished:
+                    if LEVEL not in current_loop_data['stages'][STAGE]['AStar']['level_results']:
+                        current_stage_data['AStar']['level_results'][LEVEL] = {"status": "DIED", "steps": game_steps}
 
             if bfs.alive and (bfs.x, bfs.y) == (g.x, g.y):
                 print(f"[Level {LEVEL}] BFS Mati")
                 bfs.alive = False
                 current_stage_data = current_loop_data['stages'][STAGE]
                 current_stage_data['BFS']['deaths'] += 1
-                if not bfs.finished and LEVEL not in current_loop_data['stages'][STAGE]['BFS']['level_results']:
-                    current_stage_data['BFS']['level_results'][LEVEL] = {"status": "DIED", "steps": game_steps}
-                    current_stage_data['BFS']['total_nodes'] += bfs.nodes_expanded                
+                
+                # --- NEW: Add stats immediately on death ---
+                current_stage_data['BFS']['total_steps'] += game_steps
+                current_stage_data['BFS']['total_time'] += bfs.total_compute_time
+                current_stage_data['BFS']['total_nodes'] += bfs.nodes_expanded
+
+                if not bfs.finished:
+                    if LEVEL not in current_loop_data['stages'][STAGE]['BFS']['level_results']:
+                        current_stage_data['BFS']['level_results'][LEVEL] = {"status": "DIED", "steps": game_steps}            
 
         astar_settled = astar.finished or not astar.alive
         bfs_settled = bfs.finished or not bfs.alive
         re_initialize = False
         
+        # --- LEVEL COMPLETE CHECK ---
         if astar_settled and bfs_settled:
             re_initialize = True
             current_stage_data = current_loop_data['stages'][STAGE]
             
+            # --- ONLY ADD WIN STATS HERE (Death stats already added above) ---
             astar_stats = current_stage_data['AStar']
-            if LEVEL not in astar_stats['level_results'] or astar_stats['level_results'][LEVEL]['status'] == 'QUIT':
-                if astar.finished:
-                    astar_stats['total_steps'] += astar.current_run_steps
-                    astar_stats['total_nodes'] += astar.nodes_expanded
-                    astar_stats['total_time'] += astar.total_compute_time
-                    astar_stats['total_computations'] += astar.compute_counts
-                    astar_stats['level_results'][LEVEL] = {"status": "FINISHED", "steps": game_steps}
+            if astar.finished:
+                astar_stats['total_steps'] += astar.current_run_steps
+                astar_stats['total_nodes'] += astar.nodes_expanded
+                astar_stats['total_time'] += astar.total_compute_time
+                astar_stats['level_results'][LEVEL] = {"status": "FINISHED", "steps": game_steps}
 
             bfs_stats = current_stage_data['BFS']
-            if LEVEL not in bfs_stats['level_results'] or bfs_stats['level_results'][LEVEL]['status'] == 'QUIT':
-                if bfs.finished:
-                    bfs_stats['total_steps'] += bfs.current_run_steps
-                    bfs_stats['total_nodes'] += bfs.nodes_expanded
-                    bfs_stats['total_time'] += bfs.total_compute_time
-                    bfs_stats['total_computations'] += bfs.compute_counts
-                    bfs_stats['level_results'][LEVEL] = {"status": "FINISHED", "steps": game_steps}
+            if bfs.finished:
+                bfs_stats['total_steps'] += bfs.current_run_steps
+                bfs_stats['total_nodes'] += bfs.nodes_expanded
+                bfs_stats['total_time'] += bfs.total_compute_time
+                bfs_stats['level_results'][LEVEL] = {"status": "FINISHED", "steps": game_steps}
             
             if astar.finished and bfs.finished: print(f"Kedua Agen menang di level {LEVEL}")
             elif astar.finished: print(f"A* menang, BFS gagal/mati di level {LEVEL}")
             elif bfs.finished: print(f"BFS menang, A* gagal/mati di level {LEVEL}")
-            else: print(f"Guardian menang di level {LEVEL}")
+            else: print(f"Semua mati di level {LEVEL}")
 
+        # --- RE-INITIALIZATION ---
         if re_initialize:
-            is_last_level = LEVEL == 3
-            is_last_stage = STAGE == 3
-            LEVEL = LEVEL + 1 if LEVEL < 3 else 1
+            advance_level = True
+            
+            # CHECK RETRY CONDITION
+            agents_all_dead = (not astar.finished and not bfs.finished)
+            if agents_all_dead and RETRY_ON_DEATH:
+                print(f"[RETRY] Semua agen mati. Mengulang Level {LEVEL}...")
+                advance_level = False 
+            
+            if advance_level:
+                is_last_level = LEVEL == 3
+                is_last_stage = STAGE == 3
+                
+                LEVEL = LEVEL + 1 if LEVEL < 3 else 1
 
-            if is_last_level:
-                STAGE = STAGE + 1 if STAGE < 3 else 1
-                if is_last_stage:
-                    print_loop_summary(current_loop_data)
-                    if LOOP_COUNT > 5: 
-                        break
-                    LOOP_COUNT += 1
-                    all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
-                    current_loop_data = all_loops_stats[LOOP_COUNT - 1]
+                if is_last_level:
+                    STAGE = STAGE + 1 if STAGE < 3 else 1
+                    if is_last_stage:
+                        print_loop_summary(current_loop_data)
+                        if LOOP_COUNT >= MAX_LOOPS:
+                            print(f"\n[INFO] Mencapai Batas Loop Maksimal ({MAX_LOOPS}). Simulasi Selesai.")
+                            break
+                        LOOP_COUNT += 1
+                        all_loops_stats.append(init_new_loop_stats(LOOP_COUNT))
+                        current_loop_data = all_loops_stats[LOOP_COUNT - 1]
 
+            # RESET MAP & AGENTS
             game_steps = 0
             grid = map_generator.generate_maze(LEVEL)
             size = map_generator.get_size_for_level(LEVEL)
@@ -498,10 +521,11 @@ def main():
         pygame.display.flip()
         clock.tick(settings.FPS)
 
-if __name__ == '__main__':
-    main()
     # --- EXPORT DATA ON EXIT ---
     print_final_summary(all_loops_stats)
-    export_to_excel(all_loops_stats) # Export Triggered Here
+    export_to_excel(all_loops_stats) 
     pygame.quit()
     sys.exit()
+
+if __name__ == '__main__':
+    main()
