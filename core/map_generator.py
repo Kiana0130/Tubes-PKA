@@ -1,11 +1,7 @@
 import random
 from typing import List, Tuple
 from collections import deque
-<<<<<<< HEAD
-import core.settings as settings
-=======
 from core import settings 
->>>>>>> player
 
 def get_size_for_level(level: int) -> int:
     return settings.LEVEL_SIZES.get(level, 16)
