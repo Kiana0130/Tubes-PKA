@@ -1,18 +1,22 @@
-#settings.py
 LEVEL_SIZES = {
-  1: 16,
-  2: 32,
-  3: 64,
+  1: 20,
+  2: 40,
+  3: 60,
 }
 
-WINDOW_SIZE = 768
-
+WINDOW_SIZE = 720
+COLOR_BG = (10, 10, 20)
 COLOR_WALL = (64, 62, 68)
 COLOR_PASSAGE = (215, 218, 223)
 COLOR_START = (220, 50, 50)
 COLOR_GOAL = (50, 200, 50)
 COLOR_KEY = (235, 200, 60)
-
+COLOR_ASTAR_AGENT = (255, 0, 255) # Tambahkan
+COLOR_BFS_AGENT = (0, 255, 255)   # Tambahkan
 NUM_KEYS = 2
+COLOR_SCAN_ASTAR = (224, 81, 224) # Pink muda
+COLOR_SCAN_BFS = (64, 156, 184)   # Cyan muda
+ANIMATION_SPEED = 300
+COLOR_SCAN_OVERLAP = (255, 255, 255) # Putih Terang
 
-FPS = 60
+FPS = 100000
